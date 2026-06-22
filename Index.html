@@ -582,6 +582,26 @@ function badgeClass(e){if(e==='EJECUTADO')return 'b-ej';if(e==='EN EJECUCION')re
 function isoToday(){return new Date().toISOString().slice(0,10);}
 function monthLabel(ym){const[y,m]=ym.split('-');const mn=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];return mn[parseInt(m)-1]+' '+y;}
 
+// Buscar carpeta real del frente en Drive y actualizar el link
+async function abrirCarpetaDrive(a, linkEl) {
+  try {
+    // Buscar carpeta que empiece con el ID del frente dentro de 01_VEREDAS
+    const q = `name contains '${a.id}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,webViewLink)&orderBy=createdTime`,
+      { headers: { Authorization: 'Bearer ' + driveToken } }
+    );
+    if (!r.ok) return;
+    const d = await r.json();
+    // Filtrar carpetas que sean del acre específico (nombre empieza con el ID)
+    const carpeta = d.files?.find(f => f.name.startsWith(a.id + '_') || f.name === a.id);
+    if (carpeta?.webViewLink) {
+      linkEl.href = carpeta.webViewLink;
+      linkEl.textContent = '📁 Ver fotos en Drive ↗';
+    }
+  } catch(e) {}
+}
+
 // ─── ASIGNACIÓN DE FRENTES ────────────────────────────────────────
 function fillAsigSelects() {
   ['asigResp','asigNuevoResp'].forEach(id => {
@@ -1270,10 +1290,16 @@ function openModal(id){
   document.getElementById('mFHo').textContent=fmtD(a.f_horm);document.getElementById('mFCo').textContent=fmtD(a.f_col);
   document.getElementById('mFMe').textContent=fmtD(a.f_med);document.getElementById('mFFi').textContent=fmtD(a.f_fin);
   document.getElementById('mObs').textContent=a.obs||'Sin observaciones pendientes';
-  // Punto 6: Link Drive
-  const driveUrl=`https://drive.google.com/drive/search?q=${encodeURIComponent('01_VEREDAS ' + a.id)}`;
+  // Link Drive — busca la carpeta del frente por nombre exacto
+  const nombreCarpeta = `${a.id}_${(a.dir||a.id).replace(/[^a-zA-Z0-9]/g,'_')}`;
+  const driveUrl = `https://drive.google.com/drive/search?q=${encodeURIComponent(a.id + ' in:01_VEREDAS')}`;
   const driveLinkEl=document.getElementById('mDriveLink');
-  if(driveLinkEl){driveLinkEl.href=driveUrl;}
+  if(driveLinkEl){
+    driveLinkEl.href=driveUrl;
+    driveLinkEl.title='Buscar carpeta ' + nombreCarpeta + ' en Drive';
+    // Si el backoffice está conectado a Drive, buscar el ID real de la carpeta
+    if(driveToken) abrirCarpetaDrive(a, driveLinkEl);
+  }
   // Parsear obs_g como historial cronológico
   const obsG=a.obs_g||'';
   const entries=obsG.split(/(?=\d{1,2}\/\d{1,2}\/\d{2,4})/g).filter(Boolean);
