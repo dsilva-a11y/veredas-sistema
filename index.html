@@ -882,15 +882,22 @@ async function updateAcresDataJson(p, token) {
   const SYNC_FILE = 'SYNC_UPDATES.json';
 
   const pctMap = {
-    'Estado inicial': 0, 'Programado p/ apertura': 1,
-    'Apertura': 25, 'Hormigonado': 50,
-    'Colocación': 75, 'Con observaciones': 98, 'Finalizado': 100,
+    'INICIAL': 0, 'Estado inicial': 0,
+    'PROGRAMADO': 1, 'Programado p/ apertura': 1,
+    'APERTURA': 25, 'Apertura': 25,
+    'HORMIGONADO': 50, 'Hormigonado': 50,
+    'BALDOSAS': 75, 'Colocación': 75,
+    'OBSERVACIONES': 98, 'Con observaciones': 98,
+    'FINALIZADO': 100, 'Finalizado': 100,
   };
   const estadoMap = {
-    'Estado inicial': '-', 'Programado p/ apertura': 'A EJECUTAR',
-    'Apertura': 'EN EJECUCION', 'Hormigonado': 'EN EJECUCION',
-    'Colocación': 'EN EJECUCION', 'Con observaciones': 'EN EJECUCION',
-    'Finalizado': 'EJECUTADO',
+    'INICIAL': '-', 'Estado inicial': '-',
+    'PROGRAMADO': 'A EJECUTAR', 'Programado p/ apertura': 'A EJECUTAR',
+    'APERTURA': 'EN EJECUCION', 'Apertura': 'EN EJECUCION',
+    'HORMIGONADO': 'EN EJECUCION', 'Hormigonado': 'EN EJECUCION',
+    'BALDOSAS': 'EN EJECUCION', 'Colocación': 'EN EJECUCION',
+    'OBSERVACIONES': 'EN EJECUCION', 'Con observaciones': 'EN EJECUCION',
+    'FINALIZADO': 'EJECUTADO', 'Finalizado': 'EJECUTADO',
   };
   const hoy = new Date().toISOString().slice(0, 10);
   const acres = DB.get('acres', []);
