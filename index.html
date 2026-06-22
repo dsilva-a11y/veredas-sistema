@@ -1414,16 +1414,21 @@ async function renderHome() {
   let filtered = misAcres;
   if (search) filtered = misAcres.filter(v => v.id?.includes(search) || (v.dir||v.direccion||'').toUpperCase().includes(search));
 
-  const sinResp = filtered.filter(v => !(v.resp||v.responsable) && v.estado !== 'EJECUTADO');
-  const conResp = filtered.filter(v => (v.resp||v.responsable) || v.estado === 'EJECUTADO');
+  // Ordenar: primero por pct descendente, luego alfabético por dirección
+  filtered = [...filtered].sort((a, b) => {
+    const pctDiff = (Number(b.pct)||0) - (Number(a.pct)||0);
+    if (pctDiff !== 0) return pctDiff;
+    const dirA = (a.dir||a.direccion||a.id||'').toUpperCase();
+    const dirB = (b.dir||b.direccion||b.id||'').toUpperCase();
+    return dirA.localeCompare(dirB);
+  });
 
   let html = '';
   if (!esAdmin && misAcres.length === 0) {
     html = `<div style="padding:40px 20px;text-align:center;color:var(--ink3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px">No tenés frentes asignados todavía.<br>Conectá Drive para recibir tus asignaciones.</div></div>`;
   } else {
-    if (sinResp.length && esAdmin) { html += `<div class="section-title">⚠️ Sin responsable asignado</div>`; sinResp.forEach(v => html += renderAcreRow(v)); }
     html += `<div class="section-title">📋 MIS ACRES (${filtered.length})</div>`;
-    conResp.forEach(v => html += renderAcreRow(v));
+    filtered.forEach(v => html += renderAcreRow(v));
     if (filtered.length === 0) html += `<div style="padding:40px 20px;text-align:center;color:var(--ink3)"><div style="font-size:32px;margin-bottom:8px">🔍</div><div style="font-size:14px">No se encontró ningún acre con "${search}"</div></div>`;
   }
   html += `<div style="height:16px"></div>`;
@@ -1438,25 +1443,32 @@ function renderAcreRow(v) {
     ? `<span class="responsable-pill"><span class="responsable-avatar">${respNombre.slice(0,2)}</span>${respNombre}</span>`
     : '<span style="font-size:11px;color:var(--red);font-weight:600">Sin asignar</span>';
 
-  // Estado inicial: color y badge dinámico según si tiene info
-  let stripColor = e.color;
+  const dir = (v.dir || v.direccion || '').trim();
+  const alt = (v.alt || v.altura || '').toString().trim();
+  const dirDisplay = dir ? `${dir}${alt ? ' ' + alt : ''}` : v.id;
+
+  const pct = Number(v.pct || 0);
+  let stripColor = e?.color || 'var(--text3)';
   let pctBadge, pctLabelText;
-  if (e.key === 'INICIAL') {
-    const tieneInfo = (v.responsable?.trim()) || v.f_prog || (v.notas?.length > 0) || (v.obs_g?.trim());
+
+  if (!e || e.key === 'INICIAL' || pct === 0) {
+    const tieneInfo = respNombre || v.f_prog || v.obs_g?.trim();
     stripColor = tieneInfo ? 'var(--green)' : 'var(--red)';
     pctBadge = `<div style="font-size:18px">${tieneInfo ? '🟢' : '🔴'}</div>`;
-    pctLabelText = tieneInfo ? 'Con info' : 'Sin datos';
+    pctLabelText = tieneInfo ? 'Programado' : 'Sin datos';
   } else {
-    pctBadge = `<div class="pct-badge" style="color:${e.color}">${e.pct}%</div>`;
+    pctBadge = `<div class="pct-badge" style="color:${e.color}">${pct}%</div>`;
     pctLabelText = e.name;
   }
+
+  const updatedStr = v._updated ? `· Actualizado ${new Date(v._updated).toLocaleDateString('es-AR')}` : '';
 
   return `<div class="vereda-row" onclick="openDetail('${v.id}')">
     <div class="vereda-strip" style="background:${stripColor}"></div>
     <div class="vereda-info">
       <div class="vereda-code">${v.id}</div>
-      <div class="vereda-dir">${v.dir || v.direccion || ''} ${v.alt || v.altura || ''}</div>
-      <div class="vereda-meta">${respTag} · ${v.nota || ''}</div>
+      <div class="vereda-dir">${dirDisplay}</div>
+      <div class="vereda-meta">${respTag} ${updatedStr}</div>
     </div>
     <div class="vereda-right">${pctBadge}<div class="pct-label">${pctLabelText}</div></div>
     <div class="vereda-arrow">›</div>
