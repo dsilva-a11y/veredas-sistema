@@ -1347,6 +1347,7 @@ async function renderHome() {
   const pendientes = DB.get('pendientes', []);
   const user = DB.get('usuario', { nombre:'Inspector', inicial:'IN' });
   const search = (document.getElementById('searchInput')?.value || '').toUpperCase();
+  const esAdmin = user.rol === 'admin';
 
   document.getElementById('userName').textContent = user.nombre;
   document.getElementById('profileName').textContent = user.nombre;
@@ -1356,24 +1357,31 @@ async function renderHome() {
   document.getElementById('greetingText').textContent =
     hour < 12 ? 'Buenos días,' : hour < 19 ? 'Buenas tardes,' : 'Buenas noches,';
 
-  document.getElementById('statAsignadas').textContent = acres.length;
-  document.getElementById('statPendientes').textContent = acres.filter(v => v.estado !== 'FINALIZADO').length;
+  // Filtrar por responsable asignado (usar campo resp)
+  const misAcres = esAdmin ? acres : acres.filter(a => (a.resp || a.responsable || '') === user.nombre);
+
+  document.getElementById('statAsignadas').textContent = misAcres.length;
+  document.getElementById('statPendientes').textContent = misAcres.filter(v => v.estado !== 'EJECUTADO').length;
 
   const pendCount = pendientes.filter(p => !p.sincronizado).length;
   document.getElementById('statSync').innerHTML = pendCount > 0
     ? `<span class="sync-dot pending"></span>${pendCount}` : `<span class="sync-dot"></span>OK`;
 
-  let filtered = acres;
-  if (search) filtered = acres.filter(v => v.id.includes(search) || v.direccion.toUpperCase().includes(search));
+  let filtered = misAcres;
+  if (search) filtered = misAcres.filter(v => v.id?.includes(search) || (v.dir||v.direccion||'').toUpperCase().includes(search));
 
-  const sinResp = filtered.filter(v => !v.responsable && v.estado !== 'FINALIZADO');
-  const conResp = filtered.filter(v => v.responsable || v.estado === 'FINALIZADO');
+  const sinResp = filtered.filter(v => !(v.resp||v.responsable) && v.estado !== 'EJECUTADO');
+  const conResp = filtered.filter(v => (v.resp||v.responsable) || v.estado === 'EJECUTADO');
 
   let html = '';
-  if (sinResp.length) { html += `<div class="section-title">⚠️ Sin responsable asignado</div>`; sinResp.forEach(v => html += renderAcreRow(v)); }
-  html += `<div class="section-title">📋 Mis acres (${filtered.length})</div>`;
-  conResp.forEach(v => html += renderAcreRow(v));
-  if (filtered.length === 0) html += `<div style="padding:40px 20px; text-align:center; color:var(--ink3)"><div style="font-size:32px; margin-bottom:8px">🔍</div><div style="font-size:14px">No se encontró ningún acre con "${search}"</div></div>`;
+  if (!esAdmin && misAcres.length === 0) {
+    html = `<div style="padding:40px 20px;text-align:center;color:var(--ink3)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:14px">No tenés frentes asignados todavía.<br>Conectá Drive para recibir tus asignaciones.</div></div>`;
+  } else {
+    if (sinResp.length && esAdmin) { html += `<div class="section-title">⚠️ Sin responsable asignado</div>`; sinResp.forEach(v => html += renderAcreRow(v)); }
+    html += `<div class="section-title">📋 MIS ACRES (${filtered.length})</div>`;
+    conResp.forEach(v => html += renderAcreRow(v));
+    if (filtered.length === 0) html += `<div style="padding:40px 20px;text-align:center;color:var(--ink3)"><div style="font-size:32px;margin-bottom:8px">🔍</div><div style="font-size:14px">No se encontró ningún acre con "${search}"</div></div>`;
+  }
   html += `<div style="height:16px"></div>`;
   document.getElementById('homeList').innerHTML = html;
 }
@@ -1381,8 +1389,9 @@ async function renderHome() {
 function renderAcreRow(v) {
   const idx = estadoIdx(v.estado);
   const e = ESTADOS[idx];
-  const respTag = v.responsable
-    ? `<span class="responsable-pill"><span class="responsable-avatar">${v.responsable.slice(0,2)}</span>${v.responsable}</span>`
+  const respNombre = v.resp || v.responsable || '';
+  const respTag = respNombre
+    ? `<span class="responsable-pill"><span class="responsable-avatar">${respNombre.slice(0,2)}</span>${respNombre}</span>`
     : '<span style="font-size:11px;color:var(--red);font-weight:600">Sin asignar</span>';
 
   // Estado inicial: color y badge dinámico según si tiene info
