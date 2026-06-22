@@ -735,11 +735,20 @@ async function publicarAsignaciones() {
       } catch(e) {}
     }
 
-    // Fusionar: backoffice SOLO actualiza resp y obs_g — respeta pct/estado del inspector
-    const updates = ALL.map(a => {
+    // Publicar TODOS los campos de los frentes asignados
+    // El SYNC_UPDATES tiene datos completos (descriptivos + operativos)
+    // Solo incluir frentes que tienen responsable asignado
+    const asignados = ALL.filter(a => a.resp && a.resp.trim());
+    const updates = asignados.map(a => {
       const existing = existingData[a.id] || {};
       return {
         id: a.id,
+        dir: a.dir || '',
+        alt: a.alt || '',
+        com: a.com || '',
+        area: a.area || 0,
+        interv: a.interv || '',
+        mat: a.mat || '',
         estado: existing.estado || a.estado || '-',
         pct: existing.pct !== undefined ? Number(existing.pct) : Number(a.pct || 0),
         resp: a.resp || '',
