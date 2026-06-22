@@ -713,7 +713,8 @@ async function publicarAsignaciones() {
   if (!driveToken) { loginDrive('publish'); return; }
   updateSyncBar('Publicando asignaciones...', 'var(--yellow)');
   try {
-    // Primero leer el SYNC_UPDATES actual para no pisar datos del inspector
+    // El backoffice SOLO publica resp (asignación) — nunca pisa pct/estado del inspector
+    // Leer SYNC_UPDATES actual y solo actualizar el campo resp
     const q = `name='SYNC_UPDATES.json' and trashed=false`;
     const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
       headers: { Authorization: 'Bearer ' + driveToken }
@@ -734,29 +735,22 @@ async function publicarAsignaciones() {
       } catch(e) {}
     }
 
-    // Fusionar: backoffice gana en resp/asignación, inspector gana en pct/estado si es mayor
+    // Fusionar: backoffice SOLO actualiza resp y obs_g — respeta pct/estado del inspector
     const updates = ALL.map(a => {
-      const existing = existingData[a.id];
-      const inspectorPct = existing ? Number(existing.pct || 0) : 0;
-      const backofficePct = Number(a.pct || 0);
-      // El pct más alto gana (inspector no puede retroceder)
-      const finalPct = Math.max(inspectorPct, backofficePct);
-      const finalEstado = finalPct >= 100 ? 'EJECUTADO' :
-                          finalPct > 0 ? 'EN EJECUCION' :
-                          (a.estado || '-');
+      const existing = existingData[a.id] || {};
       return {
         id: a.id,
-        estado: a.estado === 'ANULADA' ? 'ANULADA' : finalEstado,
-        pct: a.estado === 'ANULADA' ? 0 : finalPct,
+        estado: existing.estado || a.estado || '-',
+        pct: existing.pct !== undefined ? Number(existing.pct) : Number(a.pct || 0),
         resp: a.resp || '',
-        obs: existing?.obs || a.obs || '',
-        obs_g: a.obs_g || '',
-        f_prog: existing?.f_prog || a.f_prog || null,
-        f_aper: existing?.f_aper || a.f_aper || null,
-        f_horm: existing?.f_horm || a.f_horm || null,
-        f_col: existing?.f_col || a.f_col || null,
-        f_fin: existing?.f_fin || a.f_fin || null,
-        f_med: existing?.f_med || a.f_med || null,
+        obs: existing.obs || a.obs || '',
+        obs_g: a.obs_g || existing.obs_g || '',
+        f_prog: existing.f_prog || a.f_prog || null,
+        f_aper: existing.f_aper || a.f_aper || null,
+        f_horm: existing.f_horm || a.f_horm || null,
+        f_col: existing.f_col || a.f_col || null,
+        f_fin: existing.f_fin || a.f_fin || null,
+        f_med: existing.f_med || a.f_med || null,
       };
     });
     if (existingId) {
