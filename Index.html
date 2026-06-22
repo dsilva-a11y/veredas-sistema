@@ -120,11 +120,16 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 .iv{font-size:13px;color:var(--text);font-weight:500;}
 
 @media print {
+  body, html { background: #fff !important; color: #000 !important; }
   body > *:not(#page-parte) { display: none !important; }
-  .topbar, .sidebar, .parte-header, nav { display: none !important; }
-  #page-parte { display: block !important; padding: 0 !important; }
-  #parteImprimible { padding: 8px !important; }
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .topbar, .sidebar, .parte-header, nav, .btn, button { display: none !important; }
+  #page-parte { display: block !important; padding: 0 !important; background: #fff !important; }
+  #parteContent { background: #fff !important; color: #000 !important; }
+  #parteImprimible { padding: 8px !important; background: #fff !important; }
+  * { background: transparent !important; color: #000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  tr[style*="background:#fff59d"] { background: #fff59d !important; }
+  thead tr { background: #555 !important; color: #fff !important; }
+  thead tr th { color: #fff !important; }
 }
 .parte-header{background:var(--bg2);border:1px solid var(--line);padding:18px 20px;margin-bottom:12px;}
 .parte-title{font-family:var(--fh);font-size:22px;font-weight:800;margin-bottom:4px;}
@@ -300,43 +305,8 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         </div>
       </div>
 
-      <!-- KPIs certificacion -->
-      <div class="kr3" id="certKpis"></div>
-
-      <!-- Tabla sin medicion -->
-      <div class="cert-section">
-        <div class="cert-header">
-          <span style="font-family:var(--fh);font-size:12px;font-weight:600">Sin fecha de medición — disponibles para certificar</span>
-          <span class="tag" id="certSinMedTag">0 frentes</span>
-        </div>
-        <div class="tw"><table class="cert-table"><thead><tr>
-          <th>Acre</th><th>Dirección</th><th>Com.</th><th>m²</th><th>Materialidad</th><th>Responsable</th><th>F. Fin</th><th>Obs. a corregir</th>
-        </tr></thead><tbody id="certSinMedBody"></tbody></table></div>
-        <div class="cert-total" id="certSinMedTotal"></div>
-      </div>
-
-      <!-- Tabla medidos en el mes -->
-      <div class="cert-section">
-        <div class="cert-header">
-          <span style="font-family:var(--fh);font-size:12px;font-weight:600" id="certMesTitle">Medidos en el mes seleccionado</span>
-          <span class="tag" id="certMesTag">0 frentes</span>
-        </div>
-        <div class="tw"><table class="cert-table"><thead><tr>
-          <th>Acre</th><th>Dirección</th><th>Com.</th><th>m²</th><th>Materialidad</th><th>Responsable</th><th>F. Medición</th><th>F. Fin</th>
-        </tr></thead><tbody id="certMesBody"></tbody></table></div>
-        <div class="cert-total" id="certMesTotal"></div>
-      </div>
-
-      <!-- Resumen por materialidad -->
-      <div class="panel">
-        <div class="ph"><span class="pt">Resumen por materialidad — mes seleccionado</span></div>
-        <div class="tw"><table class="cert-table"><thead><tr>
-          <th>Materialidad</th><th>Sin medición (m²)</th><th>Medidos en mes (m²)</th><th>Total disponible (m²)</th><th>Frentes</th>
-        </tr></thead><tbody id="certMatBody"></tbody></table></div>
-      </div>
-
-      <!-- Resumen por etapa de avance — frentes certificables del mes -->
-      <div class="panel" style="margin-top:12px">
+      <!-- 1. RESUMEN ESTADO DE AVANCE (arriba) -->
+      <div class="panel" style="margin-bottom:12px">
         <div class="ph">
           <span class="pt">Estado de avance — frentes certificables del mes</span>
           <span class="tag" id="certEtapaSubtitle" style="font-size:10px;color:var(--text3)"></span>
@@ -348,12 +318,73 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
                 <th style="padding:8px 10px;font-weight:600">Etapa</th>
                 <th style="padding:8px 10px;font-weight:600;text-align:center">Frentes</th>
                 <th style="padding:8px 10px;font-weight:600;text-align:right">m²</th>
-                <th style="padding:8px 10px;font-weight:600;text-align:right">% del total certificable</th>
+                <th style="padding:8px 10px;font-weight:600;text-align:right">% del total</th>
                 <th style="padding:8px 10px;font-weight:600">Barra</th>
               </tr>
             </thead>
             <tbody id="certEtapaTbody"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- 2. KPIs certificacion -->
+      <div class="kr3" id="certKpis" style="margin-bottom:12px"></div>
+
+      <!-- 3. Tabla sin medicion — colapsable -->
+      <div class="cert-section" style="margin-bottom:10px">
+        <div class="cert-header" onclick="toggleCertPanel('sinMed')" style="cursor:pointer;user-select:none">
+          <span style="font-family:var(--fh);font-size:12px;font-weight:600">📋 Sin fecha de medición — disponibles para certificar</span>
+          <span class="tag" id="certSinMedTag">0 frentes</span>
+          <span id="certSinMedArrow" style="margin-left:8px;font-size:11px;color:var(--text3)">▼</span>
+        </div>
+        <div id="certSinMedPanel" style="display:none">
+          <div style="height:320px;overflow-y:auto;border-top:1px solid var(--line)">
+            <table class="cert-table" style="width:100%;border-collapse:collapse">
+              <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr>
+                <th>Acre</th><th>Dirección</th><th>Com.</th><th>m²</th><th>Materialidad</th><th>Responsable</th><th>F. Fin</th><th>Obs. a corregir</th>
+              </tr></thead>
+              <tbody id="certSinMedBody"></tbody>
+            </table>
+          </div>
+          <div class="cert-total" id="certSinMedTotal"></div>
+        </div>
+      </div>
+
+      <!-- 4. Tabla medidos en el mes — colapsable -->
+      <div class="cert-section" style="margin-bottom:10px">
+        <div class="cert-header" onclick="toggleCertPanel('mes')" style="cursor:pointer;user-select:none">
+          <span style="font-family:var(--fh);font-size:12px;font-weight:600" id="certMesTitle">✅ Medidos en el mes seleccionado</span>
+          <span class="tag" id="certMesTag">0 frentes</span>
+          <span id="certMesArrow" style="margin-left:8px;font-size:11px;color:var(--text3)">▼</span>
+        </div>
+        <div id="certMesPanel" style="display:none">
+          <div style="height:320px;overflow-y:auto;border-top:1px solid var(--line)">
+            <table class="cert-table" style="width:100%;border-collapse:collapse">
+              <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr>
+                <th>Acre</th><th>Dirección</th><th>Com.</th><th>m²</th><th>Materialidad</th><th>Responsable</th><th>F. Medición</th><th>F. Fin</th>
+              </tr></thead>
+              <tbody id="certMesBody"></tbody>
+            </table>
+          </div>
+          <div class="cert-total" id="certMesTotal"></div>
+        </div>
+      </div>
+
+      <!-- 5. Resumen por materialidad — colapsable -->
+      <div class="panel" style="margin-bottom:10px">
+        <div class="ph" onclick="toggleCertPanel('mat')" style="cursor:pointer;user-select:none">
+          <span class="pt">📊 Resumen por materialidad</span>
+          <span id="certMatArrow" style="margin-left:8px;font-size:11px;color:var(--text3)">▼</span>
+        </div>
+        <div id="certMatPanel" style="display:none">
+          <div style="height:280px;overflow-y:auto;border-top:1px solid var(--line)">
+            <table class="cert-table" style="width:100%;border-collapse:collapse">
+              <thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr>
+                <th>Materialidad</th><th>Sin medición (m²)</th><th>Medidos en mes (m²)</th><th>Total disponible (m²)</th><th>Frentes</th>
+              </tr></thead>
+              <tbody id="certMatBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -418,26 +449,32 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           <button class="btn bg" onclick="clearF()" style="margin-left:auto">✕ Limpiar</button>
           <button class="btn bg" onclick="exportCSV()">↓ CSV</button>
         </div>
-        <div class="tw">
-          <table><thead><tr>
-            <th onclick="sb('id')">Acre</th><th onclick="sb('dir')">Dirección</th><th>Com.</th>
-            <th onclick="sb('area')">m²</th><th>Interv.</th><th>Materialidad</th>
-            <th onclick="sb('estado')">Estado</th><th>Responsable</th>
-            <th onclick="sb('pct')">%</th><th>F. Fin</th><th>Obs. General</th>
+        <div class="tw" style="max-height:calc(100vh - 220px);overflow-y:auto;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:var(--bg2);z-index:2"><tr>
+            <th onclick="sb('id')" style="cursor:pointer">Acre</th><th onclick="sb('dir')" style="cursor:pointer">Dirección</th><th>Com.</th>
+            <th onclick="sb('area')" style="cursor:pointer">m²</th><th>Interv.</th><th>Materialidad</th>
+            <th onclick="sb('estado')" style="cursor:pointer">Estado</th><th>Responsable</th>
+            <th onclick="sb('pct')" style="cursor:pointer">%</th><th>F. Fin</th><th>Obs. General</th>
           </tr></thead><tbody id="tbody"></tbody></table>
         </div>
       </div>
       <div class="pg"><span id="pgInfo">—</span><div class="pgb" id="pgBtns"></div></div>
     </div>
 
-    <!-- ══ CONFIG ══ -->
+    <!-- ══ ADMINISTRACIÓN ══ -->
     <div id="page-config" class="page">
-      <div style="max-width:900px">
+      <!-- TABS -->
+      <div style="display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:16px;padding-bottom:0">
+        <button id="tab-asig" onclick="switchConfigTab('asig')" style="padding:8px 16px;border:none;border-bottom:2px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;font-size:13px">📋 Asignación</button>
+        <button id="tab-resp" onclick="switchConfigTab('resp')" style="padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);font-weight:600;cursor:pointer;font-size:13px">👥 Responsables</button>
+        <button id="tab-import" onclick="switchConfigTab('import')" style="padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);font-weight:600;cursor:pointer;font-size:13px">📥 Importar Excel</button>
+      </div>
 
-        <!-- ASIGNACIÓN DE FRENTES -->
-        <div class="panel" style="margin-bottom:14px">
+      <!-- TAB: ASIGNACIÓN -->
+      <div id="tabContent-asig" style="max-width:960px">
+        <div class="panel">
           <div class="ph">
-            <span class="pt">Asignación de frentes</span>
+            <span class="pt">Asignación de frentes a responsables</span>
             <span class="tag" id="asigCount">0 seleccionados</span>
             <button class="btn bp" onclick="publicarAsignaciones()" style="margin-left:auto">📤 Publicar asignaciones</button>
           </div>
@@ -449,7 +486,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
               </select>
               <select class="form-input" id="asigEstado" onchange="renderAsigTable()">
                 <option value="">Todos los estados</option>
-                <option value="-">Sin asignar</option>
+                <option value="-">Sin iniciar</option>
                 <option value="A EJECUTAR">A ejecutar</option>
                 <option value="EN EJECUCION">En ejecución</option>
                 <option value="EJECUTADO">Ejecutado</option>
@@ -461,10 +498,10 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
                 <option value="">— Responsable —</option>
               </select>
               <button class="btn bp" onclick="asignarSeleccionados()">✓ Asignar</button>
-              <button class="btn" onclick="desasignarSeleccionados()" style="margin-left:4px">✕ Quitar asignación</button>
+              <button class="btn" onclick="desasignarSeleccionados()" style="margin-left:4px">✕ Quitar</button>
               <span style="font-size:11px;color:var(--text3);margin-left:auto" id="asigInfo"></span>
             </div>
-            <div style="max-height:400px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">
+            <div style="max-height:450px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">
               <table style="width:100%;border-collapse:collapse;font-size:12px" id="asigTable">
                 <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
                   <tr>
@@ -482,21 +519,10 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- IMPORTAR EXCEL -->
-        <div class="panel" style="margin-bottom:14px">
-          <div class="ph"><span class="pt">Importar frentes desde Excel</span></div>
-          <div class="pb2">
-            <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
-              El Excel debe tener columnas: <strong>ID, DIRECCIÓN, ALTURA, COM, AREA, INTERV, MAT</strong> (en ese orden o con esos encabezados).
-            </div>
-            <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importarExcel(this)" style="display:none">
-            <button class="btn bp" onclick="document.getElementById('importExcel').click()">📥 Seleccionar archivo Excel</button>
-            <div id="importResult" style="margin-top:12px;font-size:12px"></div>
-          </div>
-        </div>
-
-        <!-- RESPONSABLES -->
+      <!-- TAB: RESPONSABLES -->
+      <div id="tabContent-resp" style="max-width:640px;display:none">
         <div class="panel" style="margin-bottom:14px">
           <div class="ph"><span class="pt">Agregar nuevo responsable</span></div>
           <div class="pb2">
@@ -516,6 +542,23 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </div>
         </div>
         <div class="panel"><div class="ph"><span class="pt">Responsables activos</span><span class="tag" id="respCount">0</span></div><div class="pb2" id="respList"></div></div>
+      </div>
+
+      <!-- TAB: IMPORTAR EXCEL -->
+      <div id="tabContent-import" style="max-width:640px;display:none">
+        <div class="panel">
+          <div class="ph"><span class="pt">Importar frentes desde Excel</span></div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:16px;line-height:1.6">
+              El archivo Excel debe tener las siguientes columnas:<br>
+              <strong>ID · DIRECCIÓN · ALTURA · COM · AREA · INTERV · MAT</strong><br>
+              (en ese orden o con esos encabezados exactos)
+            </div>
+            <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importarExcel(this)" style="display:none">
+            <button class="btn bp" onclick="document.getElementById('importExcel').click()">📥 Seleccionar archivo Excel</button>
+            <div id="importResult" style="margin-top:12px;font-size:12px"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -647,6 +690,22 @@ async function abrirCarpetaDrive(a, linkEl) {
       linkEl.textContent = '📁 Ver fotos en Drive ↗';
     }
   } catch(e) {}
+}
+
+// ─── CONFIG TABS ─────────────────────────────────────────────────
+function switchConfigTab(tab) {
+  ['asig','resp','import'].forEach(t => {
+    const content = document.getElementById('tabContent-' + t);
+    const btn = document.getElementById('tab-' + t);
+    if (content) content.style.display = t === tab ? '' : 'none';
+    if (btn) {
+      btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === tab ? 'var(--accent)' : 'var(--text3)';
+      btn.style.fontWeight = t === tab ? '700' : '600';
+    }
+  });
+  if (tab === 'asig') { fillAsigSelects(); renderAsigTable(); }
+  if (tab === 'resp') renderRespList();
 }
 
 // ─── ASIGNACIÓN DE FRENTES ────────────────────────────────────────
@@ -912,6 +971,16 @@ document.getElementById('nb-ei').textContent=S.frei;
 document.getElementById('nb-ae').textContent=S.frae;
 document.getElementById('nb-ej').textContent=S.frej;
 document.getElementById('nb-an').textContent=S.fran;
+
+// ─── CERT PANELS COLAPSABLES ─────────────────────────────────────
+function toggleCertPanel(id) {
+  const panel = document.getElementById('certPanel' in {'sinMed':1,'mes':1,'mat':1} ? 'cert'+id[0].toUpperCase()+id.slice(1)+'Panel' : 'cert'+id.charAt(0).toUpperCase()+id.slice(1)+'Panel');
+  const arrow = document.getElementById('cert'+id.charAt(0).toUpperCase()+id.slice(1)+'Arrow');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : '';
+  if (arrow) arrow.textContent = open ? '▼' : '▲';
+}
 
 // ─── PARTE DIARIO ─────────────────────────────────────────────────
 function initParte(){
@@ -1473,12 +1542,31 @@ function goTo(p,el){
   if(p==='cert')initCert();
   if(p==='dash')initDash();
   if(p==='lista'&&!document.getElementById('tbody').children.length)renderTable();
-  if(p==='config'){renderRespList();fillAsigSelects();renderAsigTable();}
+  if(p==='config'){switchConfigTab('asig');}
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────
 function showToast(msg){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--green);padding:12px 18px;font-size:13px;color:var(--text);border-radius:4px;z-index:200;transition:opacity .3s;';document.body.appendChild(t);}t.textContent='✓ '+msg;t.style.opacity=1;clearTimeout(t._t);t._t=setTimeout(()=>t.style.opacity=0,2500);}
-function exportPartePDF(){showToast('Usá Ctrl+P / Imprimir para generar el PDF del parte');}
+function exportPartePDF(){
+  // Abrir ventana nueva solo con el parte para imprimir como PDF
+  const contenido = document.getElementById('parteImprimible');
+  if (!contenido) { showToast('Generá el parte primero'); return; }
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Parte Diario - CONSTRUMEX</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 11.5px; color: #000; margin: 10px; background: #fff; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #555; color: #fff; padding: 5px 8px; border: 1px solid #999; text-align: left; }
+      td { padding: 4px 8px; border: 1px solid #ccc; }
+      tr.retr { background: #fff59d; }
+      @media print { @page { margin: 10mm; size: A4 landscape; } }
+    </style>
+  </head><body>${contenido.innerHTML}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 500);
+}
 
 // ─── DRIVE SYNC ──────────────────────────────────────────────────
 // Sincronización bidireccional con ACRES_DATA.json en Google Drive
