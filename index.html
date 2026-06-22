@@ -1357,8 +1357,9 @@ async function renderHome() {
   document.getElementById('greetingText').textContent =
     hour < 12 ? 'Buenos días,' : hour < 19 ? 'Buenas tardes,' : 'Buenas noches,';
 
-  // Filtrar por responsable asignado (usar campo resp)
-  const misAcres = esAdmin ? acres : acres.filter(a => (a.resp || a.responsable || '') === user.nombre);
+  // Filtrar por responsable asignado (usar campo resp, comparación case-insensitive)
+  const nombreUpper = user.nombre.toUpperCase().trim();
+  const misAcres = esAdmin ? acres : acres.filter(a => (a.resp || a.responsable || '').toUpperCase().trim() === nombreUpper);
 
   document.getElementById('statAsignadas').textContent = misAcres.length;
   document.getElementById('statPendientes').textContent = misAcres.filter(v => v.estado !== 'EJECUTADO').length;
