@@ -540,6 +540,39 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           <div style="margin-left:auto;text-align:right"><div style="font-family:var(--fh);font-size:28px;font-weight:700" id="mPct">0%</div><div style="font-size:10px;color:var(--text3)">completado</div></div>
         </div>
         <div class="pbw"><div class="pbt2"><div class="pbf" id="mPbar" style="width:0%"></div></div></div>
+        <!-- EDITAR AVANCE -->
+        <div style="margin-top:12px;padding:10px;background:var(--bg3);border:1px solid var(--line);border-radius:6px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Editar avance</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Estado</div>
+              <select id="mEditEstado" class="form-input" style="font-size:12px;padding:6px 8px">
+                <option value="-">— Sin iniciar</option>
+                <option value="A EJECUTAR">A ejecutar</option>
+                <option value="EN EJECUCION">En ejecución</option>
+                <option value="EJECUTADO">Ejecutado</option>
+                <option value="ANULADA">Anulada</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Avance %</div>
+              <select id="mEditPct" class="form-input" style="font-size:12px;padding:6px 8px">
+                <option value="0">0%</option>
+                <option value="1">1% — Programado</option>
+                <option value="25">25% — Apertura</option>
+                <option value="50">50% — Hormigonado</option>
+                <option value="75">75% — Colocación</option>
+                <option value="98">98% — Con obs.</option>
+                <option value="100">100% — Finalizado</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Resp.</div>
+              <select id="mEditResp" class="form-input" style="font-size:12px;padding:6px 8px" id="mEditResp"></select>
+            </div>
+          </div>
+          <button onclick="guardarAvanceModal()" style="margin-top:8px;width:100%;padding:7px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer">💾 Guardar cambios</button>
+        </div>
       </div>
       <div class="ms">
         <div class="mst">Fechas de avance</div>
@@ -773,6 +806,27 @@ async function importarExcel(input) {
     result.innerHTML = `<span style="color:var(--accent)">Error: ${e.message}</span>`;
   }
   input.value = '';
+}
+
+// ─── EDITAR AVANCE DESDE MODAL ───────────────────────────────────
+let currentModalId = null;
+
+function guardarAvanceModal() {
+  if (!currentModalId) return;
+  const a = ALL.find(x => x.id === currentModalId);
+  if (!a) return;
+  a.estado = document.getElementById('mEditEstado').value;
+  a.pct = Number(document.getElementById('mEditPct').value);
+  a.resp = document.getElementById('mEditResp').value;
+  // Actualizar vista del modal
+  document.getElementById('mPct').textContent = a.pct + '%';
+  document.getElementById('mPbar').style.width = a.pct + '%';
+  document.getElementById('mResp').textContent = a.resp || 'Sin asignar';
+  document.getElementById('mBadge').textContent = a.estado || '—';
+  document.getElementById('mBadge').className = 'bd ' + badgeClass(a.estado);
+  showToast('✓ ' + a.id + ' actualizado — publicá para sincronizar');
+  renderTable();
+  applyFilters();
 }
 
 // ─── RESPONSABLES ─────────────────────────────────────────────────
@@ -1282,6 +1336,7 @@ function renderRespList(){
 // ─── MODAL ────────────────────────────────────────────────────────
 function openModal(id){
   const a=ALL.find(x=>x.id===id);if(!a)return;
+  currentModalId = id;
   document.getElementById('mCode').textContent=a.id;
   document.getElementById('mAddr').textContent=`${a.dir} ${a.alt}`;
   const b=document.getElementById('mBadge');b.className='bd '+badgeClass(a.estado);b.textContent=a.estado||'—';
@@ -1289,6 +1344,12 @@ function openModal(id){
   document.getElementById('mArea').textContent=(a.area?a.area.toFixed(2)+' m²':'—');
   document.getElementById('mInterv').textContent=a.interv||'—';
   document.getElementById('mMat').textContent=a.mat||'—';
+  // Poblar selects de edición
+  const selResp = document.getElementById('mEditResp');
+  selResp.innerHTML = '<option value="">Sin asignar</option>' + RESPS.map(r=>`<option value="${r.nombre}">${r.nombre}</option>`).join('');
+  document.getElementById('mEditEstado').value = a.estado || '-';
+  document.getElementById('mEditPct').value = String(a.pct ?? 0);
+  selResp.value = a.resp || '';
   const rv=document.getElementById('mRespAv');rv.textContent=(a.resp||'—').slice(0,2);rv.style.background=respColor(a.resp);
   document.getElementById('mResp').textContent=a.resp||'Sin asignar';
   document.getElementById('mPct').textContent=a.pct+'%';
