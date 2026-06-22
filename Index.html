@@ -403,8 +403,6 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </select>
           <select class="sf" onchange="fC(this.value)" id="fComuna">
             <option value="">Todas las comunas</option>
-            <option value="3">Comuna 3</option><option value="5">Comuna 5</option>
-            <option value="1">Comuna 1</option><option value="2">Comuna 2</option>
           </select>
           <select class="sf" onchange="fM(this.value)" id="fMat">
             <option value="">Todas las materialidades</option>
@@ -1259,6 +1257,7 @@ function sb(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=1;}applyFilters
 function clearF(){fEv=fRv=fCv=fMv=searchV='';['searchBox','fEstado','fResp','fComuna','fMat'].forEach(id=>{document.getElementById(id).value='';});applyFilters();}
 function qf(estado,el){fEv=estado;fRv='';fCv='';fMv='';searchV='';document.getElementById('fEstado').value=estado;goTo('lista',null);document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));if(el)el.classList.add('active');applyFilters();}
 function fillMatSelect(){const mats=[...new Set(ALL.map(a=>a.mat).filter(Boolean))].sort();const sel=document.getElementById('fMat');sel.innerHTML='<option value="">Todas las materialidades</option>';mats.forEach(m=>sel.innerHTML+=`<option value="${m}">${m}</option>`);}
+function fillComSelect(){const coms=[...new Set(ALL.map(a=>String(a.com||'')).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));const sel=document.getElementById('fComuna');sel.innerHTML='<option value="">Todas las comunas</option>';coms.forEach(c=>sel.innerHTML+=`<option value="${c}">Comuna ${c}</option>`);}
 function fillRespSelect(){const sel=document.getElementById('fResp');sel.innerHTML='<option value="">Todos los responsables</option>';RESPS.forEach(r=>sel.innerHTML+=`<option value="${r.nombre}">${r.nombre}</option>`);}
 function exportCSV(){const h=['ACRE','DIRECCION','ALTURA','COMUNA','AREA_M2','INTERVENCION','MATERIALIDAD','ESTADO','RESPONSABLE','PCT','F_PROG','F_APERTURA','F_HORMIGON','F_COLOCACION','F_FIN','F_MEDICION','OBS_CORREGIR','OBS_GENERAL'];const rows=filtered.map(a=>[a.id,a.dir,a.alt,a.com,a.area,a.interv,a.mat,a.estado,a.resp,a.pct,a.f_prog,a.f_aper,a.f_horm,a.f_col,a.f_fin,a.f_med,(a.obs||'').replace(/,/g,';'),(a.obs_g||'').replace(/,/g,';')].join(','));const el=document.createElement('a');el.href='data:text/csv;charset=utf-8,'+encodeURIComponent([h.join(','),...rows].join('\n'));el.download='veredas_'+isoToday()+'.csv';el.click();}
 
@@ -1552,7 +1551,7 @@ async function publishToDrive() {
 }
 
 // ─── INIT ────────────────────────────────────────────────────────
-fillRespSelect();fillMatSelect();
+fillRespSelect();fillMatSelect();fillComSelect();
 initParte();
 renderTable();
 if (lastSyncTime) updateSyncBar('Último sync: ' + lastSyncTime, 'var(--text3)');
