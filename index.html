@@ -1113,46 +1113,36 @@ async function leerAsignacionesDrive() {
     const updates = await r2.json();
     if (!Array.isArray(updates)) return;
 
-    // Reemplazar datos locales con los del backoffice
-    // Preservar relevamientos locales del inspector (pendientes)
-    const pendientes = DB.get('pendientes', []);
-    const pendIds = new Set(pendientes.filter(p => !p.sincronizado).map(p => p.acreId));
-
-    const CAMPOS = ['dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
-    const acres = DB.get('acres', []);
-    const idx = {};
-    acres.forEach((a,i) => idx[a.id] = i);
-
-    updates.forEach(u => {
-      if (idx[u.id] !== undefined) {
-        const a = acres[idx[u.id]];
-        // Si tiene relevamiento pendiente, no pisar pct/estado
-        const tienePendiente = pendIds.has(u.id);
-        CAMPOS.forEach(f => {
-          if (u[f] !== null && u[f] !== undefined) {
-            if (tienePendiente && (f === 'pct' || f === 'estado')) return;
-            a[f] = u[f];
-          }
-        });
-      } else {
-        const nuevo = { id: u.id };
-        CAMPOS.forEach(f => nuevo[f] = u[f] ?? null);
-        acres.push(nuevo);
-        idx[u.id] = acres.length - 1;
-      }
-    });
-
-    // Guardar solo los frentes del usuario para no llenar localStorage
+    // Filtrar solo los frentes del usuario ANTES de procesar
     const user = DB.get('usuario', { nombre: 'Inspector' });
     const nombre = user.nombre.toUpperCase().trim();
-    const misAcres = acres.filter(a => (a.resp||'').toUpperCase().trim() === nombre);
-    
+    const misUpdates = updates.filter(u => (u.resp||'').toUpperCase().trim() === nombre);
+
+    if (misUpdates.length === 0) return;
+
+    // Preservar relevamientos locales pendientes
+    const pendientes = DB.get('pendientes', []);
+    const pendIds = new Set(pendientes.filter(p => !p.sincronizado).map(p => p.acreId));
+    const CAMPOS = ['dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
+
+    // Construir lista fresca solo con los frentes del usuario
+    const misAcres = misUpdates.map(u => {
+      const nuevo = { id: u.id };
+      CAMPOS.forEach(f => nuevo[f] = u[f] ?? null);
+      // Si tiene relevamiento pendiente, preservar pct/estado local
+      if (pendIds.has(u.id)) {
+        const acres = DB.get('acres', []);
+        const local = acres.find(a => a.id === u.id);
+        if (local) { nuevo.pct = local.pct; nuevo.estado = local.estado; }
+      }
+      return nuevo;
+    });
+
     try {
       DB.set('acres', misAcres);
       renderHome();
     } catch(e) {
       console.log('Error guardando acres:', e.message);
-      renderHome();
     }
   } catch(e) {
     console.log('leerAsignacionesDrive error:', e.message);
