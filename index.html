@@ -275,14 +275,14 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
 
       <nav class="nav-bar">
         <div class="nav-tab active" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
-        <div class="nav-tab" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        
         <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
     </div>
 
     <!-- QR -->
-    <div class="view hidden-right" id="view-qr">
+    <div class="view hidden-right" id="view-qr" style="display:none">
       <div class="header"><div class="header-title">Escanear QR</div><div class="header-sub">Apuntá la cámara al código del acre</div></div>
       <div class="qr-area">
         <div class="qr-frame">
@@ -297,7 +297,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       </div>
       <nav class="nav-bar">
         <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
-        <div class="nav-tab active" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        
         <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
@@ -309,7 +309,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       <div class="scroll-area" id="syncContent"></div>
       <nav class="nav-bar">
         <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
-        <div class="nav-tab" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        
         <div class="nav-tab active" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
@@ -336,7 +336,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       </div>
       <nav class="nav-bar">
         <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
-        <div class="nav-tab" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        
         <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab active" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
@@ -503,8 +503,8 @@ function initDriveAuth(resolve, reject) {
       CONFIG.DRIVE_CONNECTED = true;
       // Guardar token con expiración (1 hora)
       const expiry = Date.now() + (response.expires_in * 1000);
-      sessionStorage.setItem('drive_token', driveToken);
-      sessionStorage.setItem('drive_token_expiry', expiry.toString());
+      localStorage.setItem('drive_token', driveToken);
+      localStorage.setItem('drive_token_expiry', expiry.toString());
       resolve(driveToken);
     },
   });
@@ -513,8 +513,8 @@ function initDriveAuth(resolve, reject) {
 
 function getDriveToken() {
   // Revisar si hay token en sesión vigente
-  const token = sessionStorage.getItem('drive_token');
-  const expiry = parseInt(sessionStorage.getItem('drive_token_expiry') || '0');
+  const token = localStorage.getItem('drive_token');
+  const expiry = parseInt(localStorage.getItem('drive_token_expiry') || '0');
   if (token && Date.now() < expiry - 60000) {
     driveToken = token;
     CONFIG.DRIVE_CONNECTED = true;
@@ -1765,35 +1765,7 @@ async function renderSync() {
     <button class="btn-main" onclick="trySync()">${CONFIG.DRIVE_CONNECTED ? '↻ Sincronizar ahora' : '☁️ Conectar Google Drive'}</button>
   </div>`;
 
-  // Panel de configuración Google Sheets
-  const sheetIdActual = localStorage.getItem('cfg_sheet_id') || '';
-  const sheetNameActual = localStorage.getItem('cfg_sheet_name') || 'PLANILLAMADRE';
-  html += `<div style="margin:0 16px 24px; background:var(--bg2,#f5f5f5); border-radius:14px; padding:16px;">
-    <div style="font-size:13px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-      <span>📊</span> Planilla Madre — Google Sheets
-      <span style="margin-left:auto; font-size:10px; font-weight:400; color:var(--ink3,#888); background:${sheetIdActual?'rgba(76,175,80,.15)':'rgba(0,0,0,.06)'}; padding:2px 8px; border-radius:8px;">${sheetIdActual ? '✓ Configurado' : 'Sin configurar'}</span>
-    </div>
-    <div style="font-size:12px; color:var(--ink3,#888); margin-bottom:10px; line-height:1.5">
-      Al sincronizar, actualiza automáticamente estado, % y fechas en la planilla.<br>
-      Pegá el ID de la Sheet (el código largo en la URL de Google Sheets).
-    </div>
-    <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink3,#888); display:block; margin-bottom:4px">ID de la Google Sheet</label>
-    <input id="inputSheetId" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-      value="${sheetIdActual}"
-      style="width:100%; padding:10px 12px; border:1.5px solid var(--line,#ddd); border-radius:8px; font-size:12px; background:var(--bg,#fff); color:var(--ink,#333); margin-bottom:10px; box-sizing:border-box; font-family:monospace">
-    <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink3,#888); display:block; margin-bottom:4px">Nombre de la hoja (pestaña)</label>
-    <input id="inputSheetName" type="text" placeholder="PLANILLAMADRE"
-      value="${sheetNameActual}"
-      style="width:100%; padding:10px 12px; border:1.5px solid var(--line,#ddd); border-radius:8px; font-size:12px; background:var(--bg,#fff); color:var(--ink,#333); margin-bottom:12px; box-sizing:border-box">
-    <button onclick="guardarConfigSheets()" style="width:100%; padding:11px; background:#1a73e8; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
-      💾 Guardar configuración Sheets
-    </button>
-    ${sheetIdActual ? `<button onclick="testSheets()" style="width:100%; margin-top:8px; padding:10px; background:transparent; color:#1a73e8; border:1.5px solid #1a73e8; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
-      🧪 Probar conexión Sheets
-    </button>` : ''}
-  </div>`;
-
-  document.getElementById('syncContent').innerHTML = html;
+    document.getElementById('syncContent').innerHTML = html;
 }
 
 // Log visible en pantalla durante sync
