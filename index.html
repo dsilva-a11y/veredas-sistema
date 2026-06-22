@@ -1098,7 +1098,7 @@ async function leerAsignacionesDrive() {
   const token = getDriveToken();
   if (!token) return;
   try {
-    // 1. Leer SYNC_UPDATES.json (datos operativos: resp, pct, estado, fechas)
+    // Leer SYNC_UPDATES.json — ahora tiene todos los campos (descriptivos + operativos)
     const q = `name='SYNC_UPDATES.json' and trashed=false`;
     const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`, {
       headers: { Authorization: 'Bearer ' + token }
@@ -1114,63 +1114,33 @@ async function leerAsignacionesDrive() {
     const updates = await r2.json();
     if (!Array.isArray(updates)) return;
 
-    // 2. Leer ACRES_DATA.json para datos descriptivos (dir, mat, com, area, interv)
-    let acresBase = {};
-    try {
-      const q2 = `name='ACRES_DATA.json' and trashed=false`;
-      const rb = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}&fields=files(id)&orderBy=modifiedTime desc`, {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      if (rb.ok) {
-        const db2 = await rb.json();
-        if (db2.files?.length) {
-          const rb2 = await fetch(`https://www.googleapis.com/drive/v3/files/${db2.files[0].id}?alt=media`, {
-            headers: { Authorization: 'Bearer ' + token }
-          });
-          if (rb2.ok) {
-            const base = await rb2.json();
-            if (Array.isArray(base)) base.forEach(a => { acresBase[a.id] = a; });
-          }
-        }
-      }
-    } catch(e) {}
-
-    // 3. Fusionar sobre los datos locales
+    // Fusionar sobre datos locales
     const acres = DB.get('acres', []);
     const idx = {};
     acres.forEach((a,i) => idx[a.id] = i);
     let changed = 0;
+
     updates.forEach(u => {
-      const base = acresBase[u.id] || {};
       if (idx[u.id] !== undefined) {
-        // Actualizar acre existente — operativos del SYNC_UPDATES, descriptivos del ACRES_DATA
+        // Actualizar acre existente con todos los campos
         const a = acres[idx[u.id]];
-        if (u.resp !== undefined) a.resp = u.resp;
-        if (u.estado !== undefined) a.estado = u.estado;
-        if (u.pct !== undefined) a.pct = Number(u.pct);
-        if (u.obs_g !== undefined) a.obs_g = u.obs_g;
-        if (u.obs !== undefined) a.obs = u.obs;
-        // Completar datos descriptivos faltantes desde la base
-        if (!a.dir && base.dir) a.dir = base.dir;
-        if (!a.alt && base.alt) a.alt = base.alt;
-        if (!a.com && base.com) a.com = base.com;
-        if (!a.area && base.area) a.area = base.area;
-        if (!a.interv && base.interv) a.interv = base.interv;
-        if (!a.mat && base.mat) a.mat = base.mat;
-        ['f_prog','f_aper','f_horm','f_col','f_fin','f_med'].forEach(f => {
-          if (u[f] !== undefined) a[f] = u[f];
+        ['resp','estado','obs','obs_g','dir','alt','com','interv','mat',
+         'f_prog','f_aper','f_horm','f_col','f_fin','f_med'].forEach(f => {
+          if (u[f] !== undefined && u[f] !== null && u[f] !== '') a[f] = u[f];
         });
+        if (u.pct !== undefined) a.pct = Number(u.pct);
+        if (u.area !== undefined) a.area = u.area;
         changed++;
       } else {
-        // Agregar frente nuevo con datos de ambas fuentes
+        // Agregar frente nuevo con todos los datos
         acres.push({
           id: u.id,
-          dir: base.dir || u.dir || '',
-          alt: base.alt || u.alt || '',
-          com: base.com || u.com || '',
-          area: base.area || u.area || 0,
-          interv: base.interv || u.interv || '',
-          mat: base.mat || u.mat || '',
+          dir: u.dir || '',
+          alt: u.alt || '',
+          com: u.com || '',
+          area: u.area || 0,
+          interv: u.interv || '',
+          mat: u.mat || '',
           estado: u.estado || '-',
           pct: Number(u.pct) || 0,
           resp: u.resp || '',
@@ -1187,16 +1157,15 @@ async function leerAsignacionesDrive() {
         changed++;
       }
     });
+
     if (changed > 0) {
       try {
         DB.set('acres', acres);
-      } catch(storageErr) {
-        // localStorage lleno — guardar solo los acres del usuario actual
+      } catch(e) {
+        // localStorage lleno — guardar solo los asignados al usuario
         const user = DB.get('usuario', { nombre: 'Inspector' });
-        const nombreUpper = user.nombre.toUpperCase().trim();
-        const misAcres = acres.filter(a =>
-          (a.resp || '').toUpperCase().trim() === nombreUpper
-        );
+        const nombre = user.nombre.toUpperCase().trim();
+        const misAcres = acres.filter(a => (a.resp||'').toUpperCase().trim() === nombre);
         try { DB.set('acres', misAcres); } catch(e2) {}
       }
       renderHome();
@@ -1917,9 +1886,13 @@ async function actualizarAsignaciones() {
   const btn = event.target;
   btn.textContent = '⏳ Leyendo Drive...';
   btn.disabled = true;
-  await leerAsignacionesDrive();
-  btn.textContent = '✓ Asignaciones actualizadas';
-  setTimeout(() => { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }, 2000);
+  try {
+    await leerAsignacionesDrive();
+    btn.textContent = '✓ Listo';
+  } catch(e) {
+    btn.textContent = '✗ Error: ' + e.message;
+  }
+  setTimeout(() => { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }, 3000);
   renderHome();
 }
 
