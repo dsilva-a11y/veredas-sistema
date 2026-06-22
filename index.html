@@ -1,0 +1,1898 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#1c1b18">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Veredas · Inspector</title>
+<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVmVyZWRhcyBJbnNwZWN0b3IiLCJzaG9ydF9uYW1lIjoiVmVyZWRhcyIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZjJmMGViIiwidGhlbWVfY29sb3IiOiIjMWMxYjE4In0=">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  --bg: #f2f0eb; --bg2: #ffffff; --bg3: #e8e5de; --bg4: #dddad2;
+  --line: #d0cdc5; --ink: #1c1b18; --ink2: #4a4843; --ink3: #8a877f;
+  --accent: #d4561a; --accent2: #f07840;
+  --green: #1e8c5a; --green2: #d4f0e2;
+  --yellow: #c07818; --yellow2: #fef3d4;
+  --blue: #1a6aaa; --blue2: #d4e8f8;
+  --purple: #7040c8; --purple2: #e8dcf8;
+  --red: #c02820; --red2: #fcd8d6; --orange2: #ffe8d8;
+  --font: 'Plus Jakarta Sans', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { font-family: var(--font); background: var(--ink); height: 100%; overflow: hidden; -webkit-user-select: none; user-select: none; }
+#app { width: 100%; height: 100vh; height: 100dvh; background: var(--bg); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+.screen { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+.view { position: absolute; inset: 0; display: flex; flex-direction: column; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.25s; }
+.view.hidden-right { transform: translateX(100%); opacity: 0; pointer-events: none; }
+.view.active { transform: translateX(0); opacity: 1; }
+
+.scroll-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.scroll-area::-webkit-scrollbar { display: none; }
+
+.nav-bar { background: var(--bg2); border-top: 1px solid var(--line); display: flex; flex-shrink: 0; padding: 6px 8px calc(8px + env(safe-area-inset-bottom, 0px)); }
+.nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 8px 4px 4px; gap: 3px; cursor: pointer; border-radius: 12px; margin: 0 2px; transition: background 0.15s; }
+.nav-tab:active { background: var(--bg3); }
+.nav-icon { font-size: 22px; line-height: 1; }
+.nav-label { font-size: 10px; font-weight: 500; color: var(--ink3); }
+.nav-tab.active .nav-label { color: var(--accent); font-weight: 700; }
+
+.conn-banner { background: var(--yellow); color: #5a3c00; padding: 7px 16px; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-shrink: 0; text-align: center; justify-content: center; }
+.conn-banner.offline { background: var(--bg4); color: var(--ink2); }
+.conn-banner.hidden { display: none; }
+
+.home-header { background: var(--ink); padding: calc(env(safe-area-inset-top, 12px) + 8px) 20px 22px; flex-shrink: 0; }
+.home-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.home-greeting { font-size: 13px; color: rgba(255,255,255,0.5); font-weight: 500; }
+.home-name { font-size: 21px; font-weight: 800; color: white; margin: 2px 0 0; }
+.home-mode-badge { background: rgba(255,255,255,0.1); border-radius: 20px; padding: 5px 11px; font-size: 10.5px; color: rgba(255,255,255,0.6); font-weight: 600; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.home-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 16px; }
+.home-stat { background: rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; text-align: center; }
+.home-stat-val { font-size: 21px; font-weight: 800; color: white; line-height: 1; }
+.home-stat-label { font-size: 9.5px; color: rgba(255,255,255,0.45); margin-top: 3px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink3); padding: 16px 20px 8px; display: flex; justify-content: space-between; align-items: center; }
+.section-action { color: var(--accent); font-weight: 700; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+.vereda-row { background: var(--bg2); margin: 0 16px 8px; border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.15s; }
+.vereda-row:active { transform: scale(0.98); }
+.vereda-strip { width: 4px; flex-shrink: 0; align-self: stretch; border-radius: 2px; }
+.vereda-info { flex: 1; min-width: 0; }
+.vereda-code { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; }
+.vereda-dir { font-size: 14px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vereda-meta { font-size: 11.5px; color: var(--ink3); margin-top: 2px; }
+.vereda-right { text-align: right; flex-shrink: 0; }
+.pct-badge { font-size: 18px; font-weight: 800; color: var(--ink); }
+.pct-label { font-size: 10px; color: var(--ink3); font-weight: 500; }
+.vereda-arrow { font-size: 16px; color: var(--line); }
+
+.search-box { padding: 8px 16px 4px; }
+.search-input { width: 100%; background: var(--bg2); border: 1.5px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 14px; font-family: var(--font); outline: none; color: var(--ink); }
+.search-input:focus { border-color: var(--accent); }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.chip-prog { background: var(--bg3); color: var(--ink3); }
+.chip-ini-ok { background: var(--green2); color: var(--green); }
+.chip-ini-empty { background: var(--red2); color: var(--red); }
+.chip-aper { background: var(--blue2); color: var(--blue); }
+.chip-horm { background: var(--yellow2); color: var(--yellow); }
+.chip-bald { background: var(--purple2); color: var(--purple); }
+.chip-obs { background: var(--orange2); color: var(--accent); }
+.chip-fin { background: var(--green2); color: var(--green); }
+
+.qr-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px; gap: 24px; }
+.qr-frame { width: 220px; height: 220px; border: 3px solid var(--ink); border-radius: 16px; position: relative; display: flex; align-items: center; justify-content: center; background: var(--bg2); }
+.qr-corner { position: absolute; width: 24px; height: 24px; border-color: var(--accent); border-style: solid; }
+.qr-corner.tl { top: -3px; left: -3px; border-width: 4px 0 0 4px; border-radius: 4px 0 0 0; }
+.qr-corner.tr { top: -3px; right: -3px; border-width: 4px 4px 0 0; border-radius: 0 4px 0 0; }
+.qr-corner.bl { bottom: -3px; left: -3px; border-width: 0 0 4px 4px; border-radius: 0 0 0 4px; }
+.qr-corner.br { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; border-radius: 0 0 4px 0; }
+.qr-inner { width: 160px; height: 160px; background: var(--bg3); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 60px; }
+.qr-scan-line { position: absolute; left: 10px; right: 10px; height: 2px; background: var(--accent); animation: scanLine 2s linear infinite; opacity: 0.8; }
+@keyframes scanLine { 0%,100% { top: 15px; } 50% { top: calc(100% - 15px); } }
+
+.header { background: var(--bg2); padding: calc(env(safe-area-inset-top, 12px) + 6px) 20px 14px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.header-back { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; width: fit-content; }
+.header-title { font-size: 21px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+.header-sub { font-size: 13px; color: var(--ink3); margin-top: 2px; }
+
+.card { background: var(--bg2); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+
+.detail-hero { background: var(--ink); color: white; padding: calc(env(safe-area-inset-top, 12px) + 6px) 20px 20px; flex-shrink: 0; }
+.detail-code { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 600; letter-spacing: 0.1em; margin-bottom: 4px; }
+.detail-dir { font-size: 19px; font-weight: 800; line-height: 1.2; }
+.detail-estado { margin-top: 12px; }
+
+.info-rows { padding: 0 16px; }
+.info-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.info-row:last-child { border-bottom: none; }
+.info-row-label { color: var(--ink3); width: 110px; flex-shrink: 0; font-size: 12px; font-weight: 500; }
+.info-row-val { font-weight: 600; color: var(--ink); }
+
+.steps { display: flex; align-items: center; padding: 20px; gap: 0; overflow-x: auto; }
+.step { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-width: 50px; }
+.step-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; position: relative; z-index: 1; }
+.step-circle.done { background: var(--green); color: white; }
+.step-circle.current { background: var(--accent); color: white; box-shadow: 0 0 0 4px rgba(212,86,26,0.2); }
+.step-circle.pending { background: var(--bg3); color: var(--ink3); }
+.step-label { font-size: 9px; font-weight: 600; color: var(--ink3); text-align: center; line-height: 1.2; max-width: 44px; }
+.step-line { flex: 1; height: 2px; margin-bottom: 20px; min-width: 12px; }
+.step-line.done { background: var(--green); }
+.step-line.pending { background: var(--line); }
+
+.form-pad { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.form-textarea { width: 100%; background: var(--bg3); border: 2px solid transparent; color: var(--ink); padding: 13px 14px; font-size: 15px; font-family: var(--font); outline: none; border-radius: 12px; resize: none; min-height: 90px; transition: border-color 0.15s; }
+.form-textarea:focus { border-color: var(--accent); background: white; }
+.form-textarea::placeholder { color: var(--ink3); }
+.form-select { width: 100%; background: var(--bg3); border: 2px solid transparent; color: var(--ink); padding: 13px 14px; font-size: 15px; font-family: var(--font); outline: none; border-radius: 12px; }
+.form-select:focus { border-color: var(--accent); }
+
+.state-options { display: flex; flex-direction: column; gap: 8px; }
+.state-option { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; cursor: pointer; border: 2px solid var(--line); background: var(--bg2); transition: all 0.15s; }
+.state-option:active { transform: scale(0.98); }
+.state-option.selected { border-color: var(--accent); background: rgba(212,86,26,0.05); }
+.state-option-icon { font-size: 20px; }
+.state-option-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.state-option-pct { font-size: 12px; color: var(--ink3); }
+.state-option-check { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.state-option.selected .state-option-check { background: var(--accent); border-color: var(--accent); color: white; }
+
+.photo-zone { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 0 16px; }
+.photo-add { aspect-ratio: 1; border-radius: 12px; border: 2px dashed var(--line); background: var(--bg3); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: all 0.15s; }
+.photo-add:active { transform: scale(0.95); border-color: var(--accent); }
+.photo-add-icon { font-size: 24px; }
+.photo-add-label { font-size: 10px; color: var(--ink3); font-weight: 600; }
+.photo-taken { aspect-ratio: 1; border-radius: 12px; background: var(--bg4); display: flex; align-items: center; justify-content: center; font-size: 32px; position: relative; overflow: hidden; cursor: pointer; }
+.photo-taken img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-taken-badge { position: absolute; bottom: 4px; right: 4px; background: var(--green); color: white; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+.photo-loading { aspect-ratio: 1; border-radius: 12px; background: var(--bg4); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+
+.btn-main { background: var(--accent); color: white; border: none; border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700; font-family: var(--font); cursor: pointer; width: 100%; transition: all 0.2s; }
+.btn-main:active { transform: scale(0.97); background: var(--accent2); }
+.btn-main:disabled { background: var(--bg4); color: var(--ink3); }
+.btn-sec { background: var(--bg3); color: var(--ink); border: none; border-radius: 14px; padding: 14px; font-size: 15px; font-weight: 600; font-family: var(--font); cursor: pointer; width: 100%; transition: all 0.15s; }
+.btn-sec:active { background: var(--bg4); }
+
+.success-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px; gap: 16px; text-align: center; }
+.success-icon { font-size: 72px; animation: bounceIn 0.5s ease; }
+@keyframes bounceIn { 0%{ transform:scale(0.5); opacity:0 } 60%{ transform:scale(1.1) } 100%{ transform:scale(1); opacity:1 } }
+.success-title { font-size: 23px; font-weight: 800; color: var(--ink); }
+.success-sub { font-size: 14px; color: var(--ink3); line-height: 1.5; }
+.success-detail { background: var(--bg3); border-radius: 16px; padding: 16px 20px; width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.success-row { display: flex; justify-content: space-between; font-size: 13px; }
+.success-row-label { color: var(--ink3); }
+.success-row-val { font-weight: 700; color: var(--ink); }
+
+.notif { position: absolute; top: calc(env(safe-area-inset-top, 12px) + 8px); left: 16px; right: 16px; background: white; border-radius: 16px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; box-shadow: 0 8px 32px rgba(0,0,0,0.18); z-index: 200; animation: slideDown 0.4s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }
+@keyframes slideDown { from{ transform:translateY(-20px); opacity:0 } to{ transform:translateY(0); opacity:1 } }
+.notif.gone { display: none; }
+.notif-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.notif-app { font-size: 10px; font-weight: 700; color: var(--ink3); text-transform: uppercase; letter-spacing: 0.1em; }
+.notif-text { font-size: 13px; color: var(--ink); font-weight: 500; }
+
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; display: inline-block; margin-right: 4px; }
+.sync-dot.pending { background: var(--yellow); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.profile-header { background: var(--ink); padding: calc(env(safe-area-inset-top, 12px) + 16px) 20px 24px; flex-shrink: 0; text-align: center; }
+.profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #f0c050); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: white; margin: 0 auto 12px; }
+.profile-name { font-size: 19px; font-weight: 800; color: white; }
+.profile-role { font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+.profile-chips { display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+.profile-chip { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); border-radius: 20px; padding: 4px 12px; font-size: 11.5px; font-weight: 600; }
+
+.menu-item { background: var(--bg2); margin: 0 16px 8px; border-radius: 14px; padding: 15px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background 0.15s; }
+.menu-item:active { background: var(--bg3); }
+.menu-icon { font-size: 20px; width: 28px; text-align: center; }
+.menu-label { font-size: 15px; font-weight: 600; color: var(--ink); }
+.menu-arrow { margin-left: auto; color: var(--line); font-size: 16px; }
+.menu-val { margin-left: auto; font-size: 13px; color: var(--ink3); font-weight: 500; }
+
+.install-prompt { position: fixed; bottom: 0; left: 0; right: 0; background: var(--ink); color: white; padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 14px; z-index: 300; transform: translateY(100%); transition: transform 0.3s ease; }
+.install-prompt.show { transform: translateY(0); }
+.install-icon { font-size: 28px; flex-shrink: 0; }
+.install-text { flex: 1; }
+.install-title { font-size: 13.5px; font-weight: 700; }
+.install-sub { font-size: 11.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+.install-btn { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 9px 16px; font-size: 12.5px; font-weight: 700; font-family: var(--font); flex-shrink: 0; }
+.install-close { color: rgba(255,255,255,0.4); font-size: 18px; padding: 4px; flex-shrink: 0; }
+
+.login-view { background: var(--ink); height: 100%; display: flex; flex-direction: column; padding: calc(env(safe-area-inset-top,20px)+20px) 28px 28px; }
+.login-logo { width: 48px; height: 48px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 32px; border-radius: 8px; }
+.login-title { color: white; font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+.login-sub { color: rgba(255,255,255,0.5); font-size: 14px; margin-bottom: 32px; }
+.login-input { width: 100%; background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.1); color: white; padding: 14px 16px; font-size: 15px; font-family: var(--font); outline: none; border-radius: 12px; margin-bottom: 14px; }
+.login-input::placeholder { color: rgba(255,255,255,0.3); }
+.login-input:focus { border-color: var(--accent); }
+.login-demo { margin-top: auto; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 14px 16px; font-size: 12px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+.login-demo strong { color: rgba(255,255,255,0.8); }
+
+.responsable-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--bg3); border-radius: 20px; padding: 4px 10px 4px 4px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.responsable-avatar { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; }
+
+.toast-banner { position: fixed; bottom: 16px; left: 16px; right: 16px; background: var(--ink); color: white; padding: 13px 16px; border-radius: 14px; font-size: 13px; font-weight: 600; text-align: center; z-index: 250; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; pointer-events: none; }
+.toast-banner.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div class="view active" id="view-login" style="z-index:50">
+    <div class="login-view">
+      <div class="login-logo">🧱</div>
+      <div class="login-title">Veredas</div>
+      <div class="login-sub">App de campo · Inspector</div>
+      <input class="login-input" type="text" id="loginNombre" placeholder="Tu nombre o iniciales (ej: ELOY)" value="">
+      <input class="login-input" type="password" id="loginClave" placeholder="Clave de acceso" value="" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="loginError" style="color:#f08a6a; font-size:12.5px; margin:-6px 0 14px; display:none;">Clave incorrecta, probá de nuevo.</div>
+      <button class="btn-main" onclick="doLogin()">Ingresar</button>
+      <div class="login-demo">
+        <strong>Clave de equipo</strong><br>
+        Pedile la clave de acceso a tu supervisor. Cada relevamiento que cargues queda guardado y organizado junto con las fotos del acre correspondiente.
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="mainScreen" style="display:none">
+
+    <div class="conn-banner hidden" id="connBanner"></div>
+    <div class="notif gone" id="notif">
+      <div class="notif-icon">📱</div>
+      <div><div class="notif-app">Veredas · Inspector</div><div class="notif-text" id="notifText">—</div></div>
+    </div>
+
+    <!-- HOME -->
+    <div class="view active" id="view-home">
+      <div class="home-header">
+        <div class="home-top">
+          <div>
+            <div class="home-greeting" id="greetingText">Buenos días,</div>
+            <div class="home-name" id="userName">—</div>
+          </div>
+          <div class="home-mode-badge" id="modeBadge" onclick="switchTab('sync', findTab('sync'))">📦 Local</div>
+        </div>
+        <div class="home-stats">
+          <div class="home-stat"><div class="home-stat-val" id="statAsignadas">0</div><div class="home-stat-label">Acres</div></div>
+          <div class="home-stat"><div class="home-stat-val" id="statPendientes">0</div><div class="home-stat-label">En curso</div></div>
+          <div class="home-stat" onclick="switchTab('sync', findTab('sync'))">
+            <div class="home-stat-val" id="statSync"><span class="sync-dot" id="syncDot"></span>OK</div>
+            <div class="home-stat-label">Sync</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <input class="search-input" id="searchInput" placeholder="Buscar por Acre o dirección..." oninput="renderHome()">
+      </div>
+
+      <div class="scroll-area" id="homeList"></div>
+
+      <nav class="nav-bar">
+        <div class="nav-tab active" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
+        <div class="nav-tab" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
+        <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
+      </nav>
+    </div>
+
+    <!-- QR -->
+    <div class="view hidden-right" id="view-qr">
+      <div class="header"><div class="header-title">Escanear QR</div><div class="header-sub">Apuntá la cámara al código del acre</div></div>
+      <div class="qr-area">
+        <div class="qr-frame">
+          <div class="qr-corner tl"></div><div class="qr-corner tr"></div><div class="qr-corner bl"></div><div class="qr-corner br"></div>
+          <div class="qr-inner">🧱</div><div class="qr-scan-line"></div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:15px; font-weight:600; color:var(--ink); margin-bottom:6px">Posicioná el QR en el recuadro</div>
+          <div style="font-size:13px; color:var(--ink3)">La app lo detecta automáticamente</div>
+        </div>
+        <button class="btn-main" style="max-width:280px" onclick="simulateQRScan()">Simular escaneo de QR →</button>
+      </div>
+      <nav class="nav-bar">
+        <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
+        <div class="nav-tab active" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
+        <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
+      </nav>
+    </div>
+
+    <!-- SYNC -->
+    <div class="view hidden-right" id="view-sync">
+      <div class="header"><div class="header-title">Sincronización</div><div class="header-sub">Estado de fotos y relevamientos</div></div>
+      <div class="scroll-area" id="syncContent"></div>
+      <nav class="nav-bar">
+        <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
+        <div class="nav-tab" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        <div class="nav-tab active" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
+        <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
+      </nav>
+    </div>
+
+    <!-- PROFILE -->
+    <div class="view hidden-right" id="view-profile">
+      <div class="profile-header">
+        <div class="profile-avatar" id="profileAvatar">—</div>
+        <div class="profile-name" id="profileName">—</div>
+        <div class="profile-role">Inspector de campo</div>
+        <div class="profile-chips">
+          <span class="profile-chip">🟢 Activo</span>
+          <span class="profile-chip" id="profileModeChip">📦 Modo local</span>
+        </div>
+      </div>
+      <div class="scroll-area" style="padding:12px 0">
+        <div class="menu-item"><span class="menu-icon">📊</span><span class="menu-label">Relevamientos cargados</span><span class="menu-val" id="profileStatsRelev">0</span><span class="menu-arrow">›</span></div>
+        <div class="menu-item"><span class="menu-icon">📷</span><span class="menu-label">Fotos guardadas</span><span class="menu-val" id="profileStatsFotos">0</span><span class="menu-arrow">›</span></div>
+        <div class="menu-item"><span class="menu-icon">💾</span><span class="menu-label">Espacio usado</span><span class="menu-val" id="profileStorageUsed">0 MB</span><span class="menu-arrow">›</span></div>
+        <div class="menu-item"><span class="menu-icon">📡</span><span class="menu-label">Google Drive</span><span class="menu-val" id="profileServerStatus">No conectado</span><span class="menu-arrow">›</span></div>
+        <div class="menu-item" onclick="clearLocalData()"><span class="menu-icon" style="color:var(--red)">🗑️</span><span class="menu-label" style="color:var(--red)">Borrar datos locales</span></div>
+        <div class="menu-item" onclick="doLogout()"><span class="menu-icon" style="color:var(--red)">🚪</span><span class="menu-label" style="color:var(--red)">Cerrar sesión</span></div>
+      </div>
+      <nav class="nav-bar">
+        <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
+        <div class="nav-tab" onclick="switchTab('qr',this)"><span class="nav-icon">⬜</span><span class="nav-label">QR</span></div>
+        <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
+        <div class="nav-tab active" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
+      </nav>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="view hidden-right" id="view-detail">
+      <div class="detail-hero">
+        <div class="header-back" onclick="goBack('home')" style="color:rgba(255,255,255,0.6); margin-bottom:12px">‹ Mis acres</div>
+        <div class="detail-code" id="d-code">—</div>
+        <div class="detail-dir" id="d-dir">—</div>
+        <div class="detail-estado"><span class="chip" id="d-chip">—</span></div>
+      </div>
+      <div style="background:var(--bg2); flex-shrink:0;"><div class="steps" id="d-steps"></div></div>
+      <div class="scroll-area">
+        <div class="section-title">Datos del acre</div>
+        <div class="card" style="margin:0 16px">
+          <div class="info-rows">
+            <div class="info-row"><span class="info-row-label">Comuna</span><span class="info-row-val" id="d-comuna">—</span></div>
+            <div class="info-row"><span class="info-row-label">Materialidad</span><span class="info-row-val" id="d-mat">—</span></div>
+            <div class="info-row"><span class="info-row-label">Área a reparar</span><span class="info-row-val" id="d-sup">—</span></div>
+            <div class="info-row"><span class="info-row-label">Intervención</span><span class="info-row-val" id="d-interv">—</span></div>
+            <div class="info-row"><span class="info-row-label">Responsable</span><span class="info-row-val" id="d-resp">—</span></div>
+            <div class="info-row"><span class="info-row-label">Observación</span><span class="info-row-val" id="d-note" style="font-size:12.5px;font-weight:400;color:var(--ink3)">—</span></div>
+          </div>
+        </div>
+        <div class="section-title">Historial de relevamientos</div>
+        <div class="card" style="margin:0 16px" id="d-historial"></div>
+        <div class="section-title">📓 Block de notas</div>
+        <div class="card" style="margin:0 16px" id="d-notas"></div>
+        <div style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+          <button class="btn-main" id="d-btn" onclick="openRelevamiento()">+ Registrar nuevo avance</button>
+          <button class="btn-sec" onclick="goBack('home')">Volver a mis acres</button>
+        </div>
+        <div style="height:8px"></div>
+      </div>
+    </div>
+
+    <!-- RELEVAMIENTO -->
+    <div class="view hidden-right" id="view-relev">
+      <div class="header">
+        <div class="header-back" onclick="goBack('detail')">‹ Detalle</div>
+        <div class="header-title">Nuevo avance</div>
+        <div class="header-sub" id="r-subtitle">—</div>
+      </div>
+      <div class="scroll-area">
+        <div class="section-title">1. Nuevo estado de avance</div>
+        <div style="padding:0 16px"><div class="state-options" id="stateOptions"></div></div>
+
+        <div class="section-title">2. Responsable de este relevamiento</div>
+        <div style="padding:0 16px">
+          <select class="form-select" id="respSelect"></select>
+        </div>
+
+        <div class="section-title" style="margin-top:8px">3. Fotografías (mínimo 2)</div>
+        <div class="photo-zone" id="photoZone"></div>
+        <div style="padding:4px 16px; font-size:11.5px; color:var(--ink3)" id="photoCount">0 de 2 mínimas</div>
+
+        <div class="section-title" style="margin-top:8px">4. Observaciones</div>
+        <div style="padding:0 16px">
+          <textarea class="form-textarea" id="obsInput" placeholder="Describir el estado actual, novedades o incidencias..."></textarea>
+        </div>
+
+        <div style="padding:16px; display:flex; flex-direction:column; gap:10px;">
+          <button class="btn-main" id="sendBtn" onclick="sendRelevamiento()" disabled>Enviar relevamiento</button>
+          <button class="btn-sec" onclick="goBack('detail')">Cancelar</button>
+        </div>
+        <div style="height:8px"></div>
+      </div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="view hidden-right" id="view-success">
+      <div class="success-screen">
+        <div class="success-icon">✅</div>
+        <div class="success-title" id="successTitle">¡Relevamiento guardado!</div>
+        <div class="success-sub" id="successSub">El avance fue registrado en tu celular.</div>
+        <div class="success-detail">
+          <div class="success-row"><span class="success-row-label">Acre</span><span class="success-row-val" id="s-code">—</span></div>
+          <div class="success-row"><span class="success-row-label">Nuevo estado</span><span class="success-row-val" id="s-estado">—</span></div>
+          <div class="success-row"><span class="success-row-label">Carpeta destino</span><span class="success-row-val" id="s-folder">—</span></div>
+          <div class="success-row"><span class="success-row-label">Fotos</span><span class="success-row-val" id="s-fotos">—</span></div>
+          <div class="success-row"><span class="success-row-label">Hora</span><span class="success-row-val" id="s-hora">—</span></div>
+        </div>
+        <button class="btn-main" onclick="goHomeFromSuccess()">Volver al inicio</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="install-prompt" id="installPrompt">
+    <div class="install-icon">📲</div>
+    <div class="install-text"><div class="install-title">Instalar en tu celular</div><div class="install-sub">Acceso directo desde la pantalla de inicio</div></div>
+    <button class="install-btn" onclick="installApp()">Instalar</button>
+    <span class="install-close" onclick="dismissInstall()">✕</span>
+  </div>
+
+  <div class="toast-banner" id="toastBanner"></div>
+
+  <!-- CÁMARA EN VIVO — overlay de pantalla completa -->
+  <div id="cameraOverlay" style="display:none; position:fixed; inset:0; background:#000; z-index:400; flex-direction:column;">
+    <video id="cameraVideo" autoplay playsinline style="flex:1; width:100%; object-fit:cover; background:#000;"></video>
+    <canvas id="cameraCanvas" style="display:none;"></canvas>
+    <div id="cameraError" style="display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:16px; padding:24px; text-align:center; color:white;">
+      <div style="font-size:40px">📷</div>
+      <div style="font-size:15px; font-weight:600;" id="cameraErrorText">No se pudo abrir la cámara</div>
+      <button class="btn-sec" onclick="cerrarCamaraOverlay()" style="max-width:200px">Cerrar</button>
+    </div>
+    <div style="background:#000; padding:20px 24px calc(20px + env(safe-area-inset-bottom,0px)); display:flex; align-items:center; justify-content:space-between;">
+      <button onclick="cerrarCamaraOverlay()" style="background:rgba(255,255,255,0.15); color:white; border:none; border-radius:50%; width:48px; height:48px; font-size:18px;">✕</button>
+      <button id="btnCapturar" onclick="capturarFotoOverlay()" style="background:white; border:4px solid rgba(255,255,255,0.4); border-radius:50%; width:68px; height:68px; font-size:24px;">📸</button>
+      <div style="width:48px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const CONFIG = {
+  DRIVE_CONNECTED: false,
+  DRIVE_FOLDER_NAME: '01_VEREDAS',
+  MAX_PHOTO_DIMENSION: 900,
+  PHOTO_QUALITY: 0.6,
+  GOOGLE_CLIENT_ID: '970341798250-jgme8tb31ckh1mctosma7hkttb8704fa.apps.googleusercontent.com',
+  GOOGLE_SCOPE: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
+  // ID de la Google Sheet de la Planilla Madre (configurable desde Sync)
+  SHEET_ID: localStorage.getItem('cfg_sheet_id') || '',
+  // Nombre de la hoja dentro del archivo (pestaña)
+  SHEET_NAME: localStorage.getItem('cfg_sheet_name') || 'PLANILLAMADRE',
+  // Columna donde está el ID de ACRE (A=1, B=2, etc.)
+  SHEET_COL_ID: 1,
+};
+
+// ═══════════════════════════════════════════════════════════
+// GOOGLE DRIVE — Autenticación OAuth2 y subida de fotos
+// ═══════════════════════════════════════════════════════════
+let driveToken = null;
+
+async function conectarDrive() {
+  return new Promise((resolve, reject) => {
+    // Cargar Google Identity Services si no está cargado
+    if (!window.google || !window.google.accounts) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.onload = () => initDriveAuth(resolve, reject);
+      script.onerror = () => reject(new Error('No se pudo cargar Google Identity'));
+      document.head.appendChild(script);
+    } else {
+      initDriveAuth(resolve, reject);
+    }
+  });
+}
+
+function initDriveAuth(resolve, reject) {
+  const client = window.google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    scope: CONFIG.GOOGLE_SCOPE,
+    callback: (response) => {
+      if (response.error) {
+        reject(new Error('Error OAuth: ' + response.error));
+        return;
+      }
+      driveToken = response.access_token;
+      CONFIG.DRIVE_CONNECTED = true;
+      // Guardar token con expiración (1 hora)
+      const expiry = Date.now() + (response.expires_in * 1000);
+      sessionStorage.setItem('drive_token', driveToken);
+      sessionStorage.setItem('drive_token_expiry', expiry.toString());
+      resolve(driveToken);
+    },
+  });
+  client.requestAccessToken();
+}
+
+function getDriveToken() {
+  // Revisar si hay token en sesión vigente
+  const token = sessionStorage.getItem('drive_token');
+  const expiry = parseInt(sessionStorage.getItem('drive_token_expiry') || '0');
+  if (token && Date.now() < expiry - 60000) {
+    driveToken = token;
+    CONFIG.DRIVE_CONNECTED = true;
+    return token;
+  }
+  return null;
+}
+
+// Crear carpeta en Drive si no existe, retorna el folder ID
+async function ensureDriveFolder(path, token) {
+  const parts = path.split('/').filter(Boolean);
+  let parentId = 'root';
+  for (const part of parts) {
+    // Buscar si ya existe
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(part)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+      { headers: { Authorization: 'Bearer ' + token } }
+    );
+    const searchData = await searchRes.json();
+    if (searchData.files && searchData.files.length > 0) {
+      parentId = searchData.files[0].id;
+    } else {
+      // Crear carpeta
+      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: part, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
+      });
+      const createData = await createRes.json();
+      parentId = createData.id;
+    }
+  }
+  return parentId;
+}
+
+// Subir un blob al folder ID dado
+async function uploadFileToDrive(blob, filename, folderId, token) {
+  const metadata = { name: filename, parents: [folderId] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', blob, filename);
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token },
+    body: form,
+  });
+  return res.json();
+}
+
+// Actualizar o crear archivo de texto en Drive (usado para bitácoras)
+async function updateFileToDrive(text, filename, folderId, token) {
+  // Buscar si ya existe el archivo
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(filename)}' and '${folderId}' in parents and trashed=false&fields=files(id,name)`,
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  const searchData = await searchRes.json();
+  const blob = new Blob([text], { type: 'text/plain; charset=utf-8' });
+
+  if (searchData.files && searchData.files.length > 0) {
+    // Actualizar archivo existente
+    const fileId = searchData.files[0].id;
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({ name: filename })], { type: 'application/json' }));
+    form.append('file', blob, filename);
+    const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + token },
+      body: form,
+    });
+    return res.json();
+  } else {
+    // Crear archivo nuevo
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({ name: filename, parents: [folderId] })], { type: 'application/json' }));
+    form.append('file', blob, filename);
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: form,
+    });
+    return res.json();
+  }
+}
+
+// Descargar contenido de un archivo de Drive (para leer la bitácora existente)
+async function downloadFileFromDrive(fileId, token) {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (res.ok) return await res.text();
+  return null;
+}
+
+// Buscar el archivo de bitácora de un acre en su carpeta raíz de Drive
+async function findBitacoraFile(acreId, rootFolderId, token) {
+  const filename = `BITACORA_${acreId}.txt`;
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${filename}' and '${rootFolderId}' in parents and trashed=false&fields=files(id,name)`,
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  const data = await searchRes.json();
+  return data.files && data.files.length > 0 ? data.files[0] : null;
+}
+
+// Generar o actualizar la bitácora de un acre
+async function actualizarBitacora(p, acreFolder, token) {
+  const acres = DB.get('acres', []);
+  const v = acres.find(x => x.id === p.acreId);
+  if (!v) return;
+
+  const e = ESTADOS[estadoIdx(p.estadoNuevo)] || ESTADOS[0];
+  const ahora = new Date(p.fecha);
+  const fechaStr = ahora.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const horaStr = ahora.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+  const lineDiv = '─'.repeat(42);
+  const lineDoble = '═'.repeat(42);
+
+  // Leer bitácora existente si hay
+  const existente = await findBitacoraFile(p.acreId, acreFolder, token);
+  let contenidoPrevio = '';
+  if (existente) {
+    contenidoPrevio = await downloadFileFromDrive(existente.id, token) || '';
+  }
+
+  // Encabezado si es nuevo
+  let encabezado = '';
+  if (!contenidoPrevio) {
+    encabezado = [
+      lineDoble,
+      `BITÁCORA — ${p.acreId} · ${v.dir || ''} ${v.alt || ''}`,
+      `Programa: PREVIAL VI · CONSTRUMEX S.A.`,
+      `Materialidad: ${v.mat || '—'} · Área: ${v.area || '—'} m²`,
+      `Intervención: ${v.interv || '—'} · Comuna: ${v.com || '—'}`,
+      lineDoble,
+      '',
+    ].join('\n');
+  }
+
+  // Nueva entrada
+  const nuevaEntrada = [
+    `[${fechaStr} ${horaStr}] ${e.name.toUpperCase()} — ${e.pct}%`,
+    `Responsable: ${p.responsable || '—'}`,
+    p.observaciones ? `Observación: ${p.observaciones}` : 'Observación: (sin observaciones)',
+    `Fotos: ${p.fotosCount} → ${p.driveFolder?.split('/').slice(-2).join('/')||''}`,
+    lineDiv,
+    '',
+  ].join('\n');
+
+  const textoFinal = encabezado + nuevaEntrada + contenidoPrevio;
+  const filename = `BITACORA_${p.acreId}.txt`;
+  await updateFileToDrive(textoFinal, filename, acreFolder, token);
+}
+
+// Sincronizar todas las fotos pendientes a Drive
+async function syncToDrive() {
+  let token = getDriveToken();
+  if (!token) {
+    try {
+      token = await conectarDrive();
+    } catch (err) {
+      showToast('Error conectando a Drive: ' + err.message);
+      return;
+    }
+  }
+
+  const pendientes = DB.get('pendientes', []);
+  const sinSync = pendientes.filter(p => !p.sincronizado);
+
+  if (sinSync.length === 0) {
+    showToast('No hay relevamientos pendientes de sincronizar');
+    updateConnBanner();
+    renderSync();
+    return;
+  }
+
+  // Renderizar pantalla primero para que aparezca el log
+  await renderSync();
+  syncLog('Iniciando sync — ' + sinSync.length + ' relevamiento(s)', '#64b5f6');
+
+  let ok = 0, errores = 0;
+
+  for (const p of sinSync) {
+    try {
+      syncLog('Acre: ' + p.acreId + ' · ' + p.fotoIds.length + ' fotos', '#64b5f6');
+
+      // Verificar fotos disponibles
+      let fotosDisponibles = 0;
+      for (const fid of p.fotoIds) {
+        const b = await IDB.obtenerFoto(fid);
+        if (b) fotosDisponibles++;
+      }
+      syncLog('Fotos en celular: ' + fotosDisponibles + '/' + p.fotoIds.length, fotosDisponibles > 0 ? '#4caf50' : '#ff5252');
+
+      if (fotosDisponibles === 0) {
+        syncLog('Sin fotos disponibles — marcando como procesado', '#f0c050');
+        p.sincronizado = true;
+        p.fechaSync = new Date().toISOString();
+        p.sinFotos = true;
+        ok++;
+        continue;
+      }
+
+      // Crear carpeta raíz del acre (para la bitácora)
+      const acres2 = DB.get('acres', []);
+      const vv = acres2.find(x => x.id === p.acreId);
+      const acreNombre = `${p.acreId}_${(vv?.dir||p.acreId).replace(/[^a-zA-Z0-9]/g,'_')}`;
+      const acreFolderPath = `${CONFIG.DRIVE_FOLDER_NAME}/${acreNombre}`;
+      syncLog('Carpeta acre: ' + acreFolderPath, '#9a9ba3');
+      const acreFolderId = await ensureDriveFolder(acreFolderPath, token);
+
+      // Crear carpetas en Drive para las fotos (con fecha)
+      const folderPath = p.driveFolder || acreFolderPath + '/' + (ESTADOS[estadoIdx(p.estadoNuevo)]?.folder || p.estadoNuevo);
+      syncLog('Carpeta fotos: ' + folderPath, '#9a9ba3');
+      const folderId = await ensureDriveFolder(folderPath, token);
+      syncLog('Carpeta OK: ' + folderId, '#4caf50');
+
+      // Subir cada foto
+      let fotosSubidas = 0;
+      for (let i = 0; i < p.fotoIds.length; i++) {
+        const blob = await IDB.obtenerFoto(p.fotoIds[i]);
+        if (!blob) { syncLog('Foto ' + (i+1) + ': no encontrada', '#ff5252'); continue; }
+        const fecha = new Date(p.fecha).toISOString().slice(0,10).replace(/-/g,'');
+        const filename = `${p.acreId}_${p.estadoNuevo}_${fecha}_${i+1}.jpg`;
+        syncLog('Subiendo ' + filename + ' (' + Math.round(blob.size/1024) + 'KB)...', '#9a9ba3');
+        const result = await uploadFileToDrive(blob, filename, folderId, token);
+        if (result.id) {
+          syncLog('✓ ' + filename, '#4caf50');
+          fotosSubidas++;
+        } else {
+          syncLog('✗ Error: ' + JSON.stringify(result).slice(0,100), '#ff5252');
+        }
+      }
+
+      p.sincronizado = true;
+      p.fechaSync = new Date().toISOString();
+      p.fotosSubidas = fotosSubidas;
+      ok++;
+      syncLog('✓ ' + p.acreId + ' — ' + fotosSubidas + ' fotos subidas', '#4caf50');
+
+      // Actualizar bitácora del acre en Drive
+      try {
+        syncLog('Actualizando bitácora...', '#9a9ba3');
+        await actualizarBitacora(p, acreFolderId, token);
+        syncLog('✓ BITACORA_' + p.acreId + '.txt actualizada', '#4caf50');
+      } catch (bitErr) {
+        syncLog('⚠ Error bitácora (fotos OK): ' + bitErr.message, '#f0c050');
+      }
+
+      // Actualizar Planilla Madre en Google Sheets
+      if (CONFIG.SHEET_ID) {
+        try {
+          syncLog('Actualizando Planilla Madre en Sheets...', '#9a9ba3');
+          const sheetResult = await updateSheetRow(p, token);
+          if (sheetResult.skipped) {
+            syncLog('⚠ Sheets omitido: ' + sheetResult.reason, '#f0c050');
+          } else {
+            syncLog(`✓ Sheets fila ${sheetResult.row} actualizada (${sheetResult.updates} campos)`, '#4caf50');
+          }
+        } catch (sheetErr) {
+          syncLog('⚠ Error Sheets (sync Drive OK): ' + sheetErr.message, '#f0c050');
+        }
+      } else {
+        syncLog('ℹ Sheets no configurado — omitiendo actualización', '#9a9ba3');
+      }
+
+      // Actualizar ACRES_DATA.json en Drive (fuente de verdad para el backoffice)
+      try {
+        syncLog('Actualizando ACRES_DATA.json...', '#9a9ba3');
+        await updateAcresDataJson(p, token);
+        syncLog('✓ ACRES_DATA.json actualizado · ' + p.estadoNuevo + ' → pct:' + ({'Estado inicial':0,'Programado p/ apertura':1,'Apertura':25,'Hormigonado':50,'Colocación':75,'Con observaciones':98,'Finalizado':100}[p.estadoNuevo]??'?'), '#4caf50');
+      } catch (jsonErr) {
+        syncLog('⚠ Error ACRES_DATA.json: ' + jsonErr.message, '#f0c050');
+      }
+
+    } catch (err) {
+      errores++;
+      syncLog('✗ ERROR ' + p.acreId + ': ' + err.message, '#ff5252');
+      console.error('Sync error:', p.acreId, err);
+    }
+  }
+
+  DB.set('pendientes', pendientes);
+  updateConnBanner();
+  const msg = ok + ' procesado(s)' + (errores > 0 ? ' · ' + errores + ' errores' : ' ✓');
+  syncLog(msg, errores > 0 ? '#ff5252' : '#4caf50');
+  showToast(msg);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACRES_DATA.json — Fuente de verdad compartida con backoffice
+// ═══════════════════════════════════════════════════════════
+
+const ACRES_DATA_FILENAME = 'ACRES_DATA.json';
+const ACRES_DATA_FOLDER = '01_VEREDAS';
+let acresDataFileId = localStorage.getItem('acres_data_file_id') || null;
+
+async function getOrCreateAcresDataFolder(token) {
+  // Usar el mismo folder que ensureDriveFolder ya encontró/creó
+  const cached = localStorage.getItem('acres_root_folder_id');
+  if (cached) {
+    // Verificar que sigue existiendo
+    try {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${cached}?fields=id`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (r.ok) return cached;
+    } catch(e) {}
+  }
+  // Buscar por nombre — puede haber duplicados, tomar el que tiene el ACRES_DATA.json
+  const q = `name='${ACRES_DATA_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,createdTime)`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  const data = await res.json();
+  if (!data.files || data.files.length === 0) return null;
+  // Si hay múltiples, buscar cuál contiene ACRES_DATA.json
+  for (const folder of data.files) {
+    const qf = `name='${ACRES_DATA_FILENAME}' and '${folder.id}' in parents and trashed=false`;
+    const rf = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qf)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const df = await rf.json();
+    if (df.files && df.files.length > 0) {
+      // Esta carpeta tiene el archivo — usarla y cachear
+      localStorage.setItem('acres_root_folder_id', folder.id);
+      acresDataFileId = df.files[0].id;
+      localStorage.setItem('acres_data_file_id', acresDataFileId);
+      return folder.id;
+    }
+  }
+  // Ninguna tiene el archivo — usar la primera
+  const folderId = data.files[0].id;
+  localStorage.setItem('acres_root_folder_id', folderId);
+  return folderId;
+}
+
+async function findAcresDataFile(token, folderId) {
+  if (acresDataFileId) {
+    try {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${acresDataFileId}?fields=id`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (r.ok) return acresDataFileId;
+    } catch(e) {}
+  }
+  const q = folderId
+    ? `name='${ACRES_DATA_FILENAME}' and '${folderId}' in parents and trashed=false`
+    : `name='${ACRES_DATA_FILENAME}' and trashed=false`;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  const data = await res.json();
+  if (data.files && data.files.length > 0) {
+    acresDataFileId = data.files[0].id;
+    localStorage.setItem('acres_data_file_id', acresDataFileId);
+    return acresDataFileId;
+  }
+  return null;
+}
+
+async function updateAcresDataJson(p, token) {
+  // Estrategia liviana: escribir solo los cambios en SYNC_UPDATES.json
+  // El backoffice lee este archivo y fusiona sobre ALL
+  const SYNC_FILE = 'SYNC_UPDATES.json';
+
+  const pctMap = {
+    'Estado inicial': 0, 'Programado p/ apertura': 1,
+    'Apertura': 25, 'Hormigonado': 50,
+    'Colocación': 75, 'Con observaciones': 98, 'Finalizado': 100,
+  };
+  const estadoMap = {
+    'Estado inicial': '-', 'Programado p/ apertura': 'A EJECUTAR',
+    'Apertura': 'EN EJECUCION', 'Hormigonado': 'EN EJECUCION',
+    'Colocación': 'EN EJECUCION', 'Con observaciones': 'EN EJECUCION',
+    'Finalizado': 'EJECUTADO',
+  };
+  const hoy = new Date().toISOString().slice(0, 10);
+  const acres = DB.get('acres', []);
+  const v = acres.find(a => a.id === p.acreId);
+
+  const update = {
+    id: p.acreId,
+    estado: estadoMap[p.estadoNuevo] || 'EN EJECUCION',
+    pct: pctMap[p.estadoNuevo] ?? (v?.pct ?? 0),
+    resp: p.responsable || v?.resp || '',
+    obs: p.observaciones || v?.obs || '',
+    obs_g: v?.obs_g || '',
+    f_prog: v?.f_prog || null,
+    f_aper: p.estadoNuevo === 'Apertura' ? (v?.f_aper || hoy) : (v?.f_aper || null),
+    f_horm: p.estadoNuevo === 'Hormigonado' ? (v?.f_horm || hoy) : (v?.f_horm || null),
+    f_col: p.estadoNuevo === 'Colocación' ? (v?.f_col || hoy) : (v?.f_col || null),
+    f_fin: p.estadoNuevo === 'Finalizado' ? (v?.f_fin || hoy) : (v?.f_fin || null),
+    f_med: v?.f_med || null,
+    _updated: new Date().toISOString(),
+  };
+
+  // Buscar SYNC_UPDATES.json en la raíz de Drive (sin importar carpeta)
+  const q = `name='${SYNC_FILE}' and trashed=false`;
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`,
+    { headers: { Authorization: 'Bearer ' + token } }
+  );
+  const searchData = await searchRes.json();
+
+  let updates = [];
+  let syncFileId = searchData.files?.[0]?.id || null;
+
+  if (syncFileId) {
+    // Descargar el archivo liviano existente (solo cambios previos)
+    try {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${syncFileId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (r.ok) updates = await r.json();
+    } catch(e) { updates = []; }
+  }
+
+  // Actualizar o agregar este ACRE en la lista de cambios
+  const idx = updates.findIndex(a => a.id === p.acreId);
+  if (idx >= 0) updates[idx] = update;
+  else updates.push(update);
+
+  // Subir SYNC_UPDATES.json (archivo pequeño, solo los modificados)
+  const blob = new Blob([JSON.stringify(updates)], { type: 'application/json' });
+
+  if (syncFileId) {
+    const r = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${syncFileId}?uploadType=media`,
+      { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }
+    );
+    if (!r.ok) throw new Error('Error subiendo SYNC_UPDATES: ' + r.status);
+  } else {
+    const meta = { name: SYNC_FILE };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', blob, SYNC_FILE);
+    const r = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+      { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: form }
+    );
+    if (!r.ok) throw new Error('Error creando SYNC_UPDATES: ' + r.status);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// GOOGLE SHEETS — Actualizar fila del ACRE en Planilla Madre
+// ═══════════════════════════════════════════════════════════
+
+// Mapa de columnas de la planilla madre (1-indexado, ajustable)
+// Orden asumido: A=ID, B=DIR, C=ALT, D=COM, E=AREA, F=INTERV, G=MAT,
+//               H=ESTADO, I=RESP, J=OBS, K=OBS_G, L=F_MED, M=F_PROG,
+//               N=F_APER, O=F_HORM, P=F_COL, Q=F_FIN, R=PCT
+const SHEET_COLS = {
+  estado: 'H', resp: 'I', obs: 'J',
+  f_prog: 'M', f_aper: 'N', f_horm: 'O', f_col: 'P', f_fin: 'Q', pct: 'R'
+};
+
+async function findSheetRow(acreId, token) {
+  // Busca la fila donde la columna A = acreId
+  const sheetId = CONFIG.SHEET_ID;
+  const sheetName = CONFIG.SHEET_NAME;
+  if (!sheetId) throw new Error('No configurado el ID de la Planilla Madre en Sheets');
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName + '!A:A')}`;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error('Sheets API: ' + (err.error?.message || res.status));
+  }
+  const data = await res.json();
+  const rows = data.values || [];
+  for (let i = 0; i < rows.length; i++) {
+    if ((rows[i][0] || '').toString().trim().toUpperCase() === acreId.toUpperCase()) {
+      return i + 1; // Sheets es 1-indexado
+    }
+  }
+  return null; // No encontrado
+}
+
+async function updateSheetRow(p, token) {
+  const sheetId = CONFIG.SHEET_ID;
+  const sheetName = CONFIG.SHEET_NAME;
+  if (!sheetId) return { skipped: true, reason: 'Sin SHEET_ID configurado' };
+
+  // Datos del acre desde localStorage
+  const acres = DB.get('acres', []);
+  const v = acres.find(a => a.id === p.acreId);
+  if (!v) return { skipped: true, reason: 'Acre no encontrado en local' };
+
+  // Buscar la fila
+  const rowNum = await findSheetRow(p.acreId, token);
+  if (!rowNum) return { skipped: true, reason: 'ACRE ' + p.acreId + ' no encontrado en la hoja' };
+
+  // Estado mapeado al formato de la planilla
+  const estadoMap = {
+    'Estado inicial': '-',
+    'Programado p/ apertura': 'A EJECUTAR',
+    'Apertura': 'EN EJECUCION',
+    'Hormigonado': 'EN EJECUCION',
+    'Colocación': 'EN EJECUCION',
+    'Con observaciones': 'EN EJECUCION',
+    'Finalizado': 'EJECUTADO',
+  };
+  const estadoPlanilla = estadoMap[p.estadoNuevo] || 'EN EJECUCION';
+
+  // PCT según estado
+  const pctMap = {
+    'Estado inicial': 0, 'Programado p/ apertura': 1,
+    'Apertura': 25, 'Hormigonado': 50,
+    'Colocación': 75, 'Con observaciones': 98, 'Finalizado': 100,
+  };
+  const pct = pctMap[p.estadoNuevo] ?? v.pct ?? 0;
+
+  // Fecha de hoy en formato ISO (yyyy-mm-dd)
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  // Construir actualizaciones como rangos individuales
+  const updates = [
+    { range: `${sheetName}!H${rowNum}`, values: [[estadoPlanilla]] },
+    { range: `${sheetName}!I${rowNum}`, values: [[p.responsable || v.resp || '']] },
+    { range: `${sheetName}!R${rowNum}`, values: [[pct]] },
+  ];
+
+  // Actualizar fecha según etapa
+  if (p.estadoNuevo === 'Apertura' && !v.f_aper)
+    updates.push({ range: `${sheetName}!N${rowNum}`, values: [[hoy]] });
+  if (p.estadoNuevo === 'Hormigonado' && !v.f_horm)
+    updates.push({ range: `${sheetName}!O${rowNum}`, values: [[hoy]] });
+  if (p.estadoNuevo === 'Colocación' && !v.f_col)
+    updates.push({ range: `${sheetName}!P${rowNum}`, values: [[hoy]] });
+  if (p.estadoNuevo === 'Finalizado' && !v.f_fin)
+    updates.push({ range: `${sheetName}!Q${rowNum}`, values: [[hoy]] });
+  if (p.observaciones)
+    updates.push({ range: `${sheetName}!J${rowNum}`, values: [[p.observaciones]] });
+
+  // Batch update
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      valueInputOption: 'USER_ENTERED',
+      data: updates,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error('Sheets batchUpdate: ' + (err.error?.message || res.status));
+  }
+
+  // Actualizar también el dato local
+  v.estado = estadoPlanilla;
+  v.pct = pct;
+  if (p.observaciones) v.obs = p.observaciones;
+  DB.set('acres', acres);
+
+  return { ok: true, row: rowNum, updates: updates.length };
+}
+
+// Intentar restaurar sesión al cargar
+window.addEventListener('load', () => {
+  if (getDriveToken()) {
+    updateConnBanner();
+  }
+});
+
+const ESTADOS = [
+  { key:'INICIAL',      name:'Estado inicial',        pct:null, icon:'📍', chip:'chip-ini',  color:'#5a5b63', folder:'00_INICIAL' },
+  { key:'PROGRAMADO',   name:'Programado p/ apertura', pct:1,   icon:'⬜', chip:'chip-prog', color:'#8A8A8A', folder:'01_PROGRAMADO' },
+  { key:'APERTURA',     name:'Apertura',               pct:25,  icon:'🔵', chip:'chip-aper', color:'#1a6aaa', folder:'25_APERTURA' },
+  { key:'HORMIGONADO',  name:'Hormigonado',            pct:50,  icon:'🟡', chip:'chip-horm', color:'#c07818', folder:'50_HORMIGONADO' },
+  { key:'BALDOSAS',     name:'Colocación',             pct:75,  icon:'🟣', chip:'chip-bald', color:'#7040c8', folder:'75_COLOCACION' },
+  { key:'OBSERVACIONES',name:'Con observaciones',      pct:98,  icon:'🟠', chip:'chip-obs',  color:'#d4561a', folder:'98_OBSERVACIONES' },
+  { key:'FINALIZADO',   name:'Finalizado',             pct:100, icon:'✅', chip:'chip-fin',  color:'#1e8c5a', folder:'100_FINALIZADO' },
+];
+function estadoIdx(key) {
+  const idx = ESTADOS.findIndex(e => e.key === key);
+  if (idx === -1) {
+    if (key === 'EN EJECUCION') return 2;
+    if (key === 'A EJECUTAR') return 1;
+    if (key === 'EJECUTADO') return 6;
+    return 0;
+  }
+  return idx;
+}
+// Color del estado inicial según si tiene info cargada
+function colorEstadoInicial(acre) {
+  const tieneInfo = (acre.responsable && acre.responsable.trim()) ||
+                    (acre.f_prog) ||
+                    (acre.obs_g && acre.obs_g.trim()) ||
+                    (acre.notas && acre.notas.length > 0);
+  return tieneInfo ? 'var(--green)' : 'var(--red)';
+}
+function pctLabel(estado, acre) {
+  if (estado.key === 'INICIAL') {
+    const tieneInfo = (acre?.responsable && acre.responsable.trim()) || acre?.f_prog || (acre?.notas?.length > 0);
+    return tieneInfo ? '✓' : '!';
+  }
+  return estado.pct + '%';
+}
+
+let RESPONSABLES = ['CX','ELOY','ALE','GOMEZ','4D'];
+
+const IDB = {
+  db: null,
+  async open() {
+    if (this.db) return this.db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('veredas_db', 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('fotos')) db.createObjectStore('fotos', { keyPath: 'id' });
+      };
+      req.onsuccess = (e) => { this.db = e.target.result; resolve(this.db); };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  async guardarFoto(id, blob) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('fotos', 'readwrite');
+      tx.objectStore('fotos').put({ id, blob, fecha: Date.now() });
+      tx.oncomplete = () => resolve(id);
+      tx.onerror = (e) => reject(e);
+    });
+  },
+  async obtenerFoto(id) {
+    const db = await this.open();
+    return new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readonly');
+      const req = tx.objectStore('fotos').get(id);
+      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onerror = () => resolve(null);
+    });
+  },
+  async borrarFoto(id) {
+    const db = await this.open();
+    return new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readwrite');
+      tx.objectStore('fotos').delete(id);
+      tx.oncomplete = () => resolve();
+    });
+  },
+  async borrarTodo() {
+    const db = await this.open();
+    return new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readwrite');
+      tx.objectStore('fotos').clear();
+      tx.oncomplete = () => resolve();
+    });
+  },
+  async contarFotos() {
+    const db = await this.open();
+    return new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readonly');
+      const req = tx.objectStore('fotos').count();
+      req.onsuccess = () => resolve(req.result);
+    });
+  },
+  async tamanoTotal() {
+    const db = await this.open();
+    return new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readonly');
+      const req = tx.objectStore('fotos').getAll();
+      req.onsuccess = () => {
+        let total = 0;
+        req.result.forEach(r => total += (r.blob ? r.blob.size : 0));
+        resolve(total);
+      };
+    });
+  }
+};
+
+const DB = {
+  get(key, fallback) {
+    try { const v = localStorage.getItem('veredas_' + key); return v ? JSON.parse(v) : fallback; }
+    catch(e) { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem('veredas_' + key, JSON.stringify(value)); return true; }
+    catch(e) { console.error('Error guardando metadata', e); return false; }
+  }
+};
+
+function seedInicial() {
+  if (DB.get('acres', null)) return;
+  const acres = [
+    { id:'AA0252', direccion:'Azcuenaga 403', comuna:3, area:40, material:'64 panes gris', interv:'PARCIAL', estado:'BALDOSAS', responsable:'CX', nota:'Suspendido 16/4 - reactivado', historial:[
+      {estado:'PROGRAMADO', fecha:'2026-06-10', obs:'Alta inicial', resp:'CX'},
+      {estado:'APERTURA', fecha:'2026-06-16', obs:'Inicio de excavación', resp:'CX'},
+      {estado:'HORMIGONADO', fecha:'2026-06-16', obs:'Colada completa', resp:'CX'},
+      {estado:'BALDOSAS', fecha:'2026-06-17', obs:'En colocación', resp:'CX'},
+    ]},
+    { id:'AA0331', direccion:'Corrientes Av. 2493', comuna:3, area:20, material:'64 panes blanco', interv:'PARCIAL', estado:'BALDOSAS', responsable:'ELOY', nota:'Suspendido - reactivado', historial:[
+      {estado:'PROGRAMADO', fecha:'2026-06-04', obs:'Alta inicial', resp:'ELOY'},
+      {estado:'APERTURA', fecha:'2026-06-09', obs:'Inicio de excavación', resp:'ELOY'},
+      {estado:'HORMIGONADO', fecha:'2026-06-10', obs:'Colada completa', resp:'ELOY'},
+      {estado:'BALDOSAS', fecha:'2026-06-11', obs:'En colocación', resp:'ELOY'},
+    ]},
+    { id:'AA0332', direccion:'Corrientes Av. 2501', comuna:3, area:20, material:'64 panes gris', interv:'PARCIAL', estado:'APERTURA', responsable:'ELOY', nota:'Suspendido por inspección 16/4', historial:[
+      {estado:'PROGRAMADO', fecha:'2026-06-12', obs:'Alta inicial', resp:'ELOY'},
+      {estado:'APERTURA', fecha:'2026-06-12', obs:'Inicio de excavación', resp:'ELOY'},
+    ]},
+    { id:'AA1062', direccion:'Solis 123', comuna:3, area:20, material:'64PPGG + intertrabado', interv:'PARCIAL', estado:'PROGRAMADO', responsable:'', nota:'Prioritario', historial:[]},
+    { id:'AA1164', direccion:'Larrea 589', comuna:3, area:6, material:'64 panes gris', interv:'PARCIAL', estado:'BALDOSAS', responsable:'CX', nota:'Suspendido - reactivado - KEVIN', historial:[
+      {estado:'PROGRAMADO', fecha:'2026-06-08', obs:'Alta inicial', resp:'CX'},
+      {estado:'APERTURA', fecha:'2026-06-10', obs:'Inicio de excavación', resp:'CX'},
+      {estado:'HORMIGONADO', fecha:'2026-06-13', obs:'Colada completa', resp:'CX'},
+      {estado:'BALDOSAS', fecha:'2026-06-17', obs:'En colocación', resp:'CX'},
+    ]},
+    { id:'AA1775', direccion:'Pueyrredon Av. 451', comuna:3, area:6, material:'64 panes gris', interv:'PARCIAL', estado:'PROGRAMADO', responsable:'', nota:'Oficio', historial:[]},
+    { id:'AA2447', direccion:'Matheu 1505', comuna:3, area:10, material:'16 panes negro', interv:'PARCIAL', estado:'PROGRAMADO', responsable:'', nota:'Prioritario', historial:[]},
+    { id:'AA2478', direccion:'Belgrano Av. 3072', comuna:3, area:10, material:'1/4 de rueda negro', interv:'PARCIAL', estado:'APERTURA', responsable:'ALE', nota:'Suspendido - reactivado', historial:[
+      {estado:'PROGRAMADO', fecha:'2026-06-16', obs:'Alta inicial', resp:'ALE'},
+      {estado:'APERTURA', fecha:'2026-06-16', obs:'Inicio de excavación', resp:'ALE'},
+    ]},
+    { id:'AA2909', direccion:'Lezica 4229', comuna:5, area:15, material:'64 panes negro', interv:'PARCIAL', estado:'PROGRAMADO', responsable:'GOMEZ', nota:'Paso a parcial', historial:[]},
+    { id:'AA3046', direccion:'Ayacucho 129', comuna:3, area:44, material:'64 panes gris', interv:'COMPLETO', estado:'PROGRAMADO', responsable:'', nota:'Suspendido por servicio - reactiva', historial:[]},
+  ];
+  DB.set('acres', acres);
+  DB.set('pendientes', []);
+  DB.set('responsables', RESPONSABLES);
+}
+seedInicial();
+RESPONSABLES = DB.get('responsables', RESPONSABLES);
+
+let currentId = null;
+let currentAcre = null;
+let selectedState = null;
+let photosCaptured = [];
+
+// Clave de acceso compartida del equipo — cambiala acá cuando quieras
+const CLAVE_ACCESO = 'CONSTRUMEX2026';
+
+function doLogin() {
+  const clave = document.getElementById('loginClave').value.trim();
+  if (clave !== CLAVE_ACCESO) {
+    document.getElementById('loginError').style.display = 'block';
+    return;
+  }
+  document.getElementById('loginError').style.display = 'none';
+
+  let nombre = document.getElementById('loginNombre').value.trim().toUpperCase();
+  if (!nombre) nombre = 'INSPECTOR';
+  DB.set('usuario', { nombre, inicial: nombre.slice(0,2) });
+  if (!RESPONSABLES.includes(nombre)) { RESPONSABLES.push(nombre); DB.set('responsables', RESPONSABLES); }
+  document.getElementById('view-login').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'flex';
+  renderHome();
+  updateConnBanner();
+}
+
+function doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  document.getElementById('loginClave').value = '';
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('view-login').style.display = 'flex';
+}
+
+async function clearLocalData() {
+  if (!confirm('Esto borra todos los acres, relevamientos y fotos guardadas en este celular. ¿Continuar?')) return;
+  localStorage.clear();
+  await IDB.borrarTodo();
+  seedInicial();
+  renderHome();
+  showToast('Datos locales reiniciados');
+}
+
+async function renderHome() {
+  const acres = DB.get('acres', []);
+  const pendientes = DB.get('pendientes', []);
+  const user = DB.get('usuario', { nombre:'Inspector', inicial:'IN' });
+  const search = (document.getElementById('searchInput')?.value || '').toUpperCase();
+
+  document.getElementById('userName').textContent = user.nombre;
+  document.getElementById('profileName').textContent = user.nombre;
+  document.getElementById('profileAvatar').textContent = user.inicial;
+
+  const hour = new Date().getHours();
+  document.getElementById('greetingText').textContent =
+    hour < 12 ? 'Buenos días,' : hour < 19 ? 'Buenas tardes,' : 'Buenas noches,';
+
+  document.getElementById('statAsignadas').textContent = acres.length;
+  document.getElementById('statPendientes').textContent = acres.filter(v => v.estado !== 'FINALIZADO').length;
+
+  const pendCount = pendientes.filter(p => !p.sincronizado).length;
+  document.getElementById('statSync').innerHTML = pendCount > 0
+    ? `<span class="sync-dot pending"></span>${pendCount}` : `<span class="sync-dot"></span>OK`;
+
+  let filtered = acres;
+  if (search) filtered = acres.filter(v => v.id.includes(search) || v.direccion.toUpperCase().includes(search));
+
+  const sinResp = filtered.filter(v => !v.responsable && v.estado !== 'FINALIZADO');
+  const conResp = filtered.filter(v => v.responsable || v.estado === 'FINALIZADO');
+
+  let html = '';
+  if (sinResp.length) { html += `<div class="section-title">⚠️ Sin responsable asignado</div>`; sinResp.forEach(v => html += renderAcreRow(v)); }
+  html += `<div class="section-title">📋 Mis acres (${filtered.length})</div>`;
+  conResp.forEach(v => html += renderAcreRow(v));
+  if (filtered.length === 0) html += `<div style="padding:40px 20px; text-align:center; color:var(--ink3)"><div style="font-size:32px; margin-bottom:8px">🔍</div><div style="font-size:14px">No se encontró ningún acre con "${search}"</div></div>`;
+  html += `<div style="height:16px"></div>`;
+  document.getElementById('homeList').innerHTML = html;
+}
+
+function renderAcreRow(v) {
+  const idx = estadoIdx(v.estado);
+  const e = ESTADOS[idx];
+  const respTag = v.responsable
+    ? `<span class="responsable-pill"><span class="responsable-avatar">${v.responsable.slice(0,2)}</span>${v.responsable}</span>`
+    : '<span style="font-size:11px;color:var(--red);font-weight:600">Sin asignar</span>';
+
+  // Estado inicial: color y badge dinámico según si tiene info
+  let stripColor = e.color;
+  let pctBadge, pctLabelText;
+  if (e.key === 'INICIAL') {
+    const tieneInfo = (v.responsable?.trim()) || v.f_prog || (v.notas?.length > 0) || (v.obs_g?.trim());
+    stripColor = tieneInfo ? 'var(--green)' : 'var(--red)';
+    pctBadge = `<div style="font-size:18px">${tieneInfo ? '🟢' : '🔴'}</div>`;
+    pctLabelText = tieneInfo ? 'Con info' : 'Sin datos';
+  } else {
+    pctBadge = `<div class="pct-badge" style="color:${e.color}">${e.pct}%</div>`;
+    pctLabelText = e.name;
+  }
+
+  return `<div class="vereda-row" onclick="openDetail('${v.id}')">
+    <div class="vereda-strip" style="background:${stripColor}"></div>
+    <div class="vereda-info">
+      <div class="vereda-code">${v.id}</div>
+      <div class="vereda-dir">${v.dir || v.direccion || ''} ${v.alt || v.altura || ''}</div>
+      <div class="vereda-meta">${respTag} · ${v.nota || ''}</div>
+    </div>
+    <div class="vereda-right">${pctBadge}<div class="pct-label">${pctLabelText}</div></div>
+    <div class="vereda-arrow">›</div>
+  </div>`;
+}
+
+function findTab(name) {
+  return Array.from(document.querySelectorAll('.nav-tab')).find(t => t.getAttribute('onclick') && t.getAttribute('onclick').includes(`'${name}'`));
+}
+
+const viewStack = ['home'];
+function switchTo(id) {
+  document.querySelectorAll('.view').forEach(v => { v.classList.remove('active','hidden-right'); v.classList.add('hidden-right'); });
+  const el = document.getElementById('view-' + id);
+  el.classList.remove('hidden-right'); el.classList.add('active');
+}
+function navigate(id) { viewStack.push(id); switchTo(id); }
+function goBack(id) { viewStack.pop(); switchTo(id || viewStack[viewStack.length-1] || 'home'); }
+function switchTab(tab, el) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => { if (t.getAttribute('onclick') && t.getAttribute('onclick').includes(`'${tab}'`)) t.classList.add('active'); });
+  switchTo(tab);
+  viewStack.length = 1; viewStack[0] = tab;
+  if (tab === 'sync') renderSync();
+  if (tab === 'profile') renderProfile();
+}
+
+function openDetail(id) {
+  const acres = DB.get('acres', []);
+  const v = acres.find(x => x.id === id);
+  if (!v) return;
+  currentId = id; currentAcre = v;
+  const idx = estadoIdx(v.estado);
+  const e = ESTADOS[idx];
+
+  document.getElementById('d-code').textContent = v.id;
+  document.getElementById('d-dir').textContent = v.direccion;
+  const chip = document.getElementById('d-chip');
+  if (e.key === 'INICIAL') {
+    const tieneInfo = (v.responsable?.trim()) || v.f_prog || (v.notas?.length > 0) || (v.obs_g?.trim());
+    chip.className = 'chip ' + (tieneInfo ? 'chip-ini-ok' : 'chip-ini-empty');
+    chip.textContent = e.name + (tieneInfo ? ' ✓' : ' — sin datos');
+  } else {
+    chip.className = 'chip ' + e.chip;
+    chip.textContent = e.name + ' · ' + e.pct + '%';
+  }
+  document.getElementById('d-comuna').textContent = 'Comuna ' + v.comuna;
+  document.getElementById('d-mat').textContent = v.material;
+  document.getElementById('d-sup').textContent = v.area + ' m²';
+  document.getElementById('d-interv').textContent = v.interv;
+  document.getElementById('d-resp').textContent = v.responsable || 'Sin asignar';
+  document.getElementById('d-note').textContent = v.nota || '—';
+  document.getElementById('r-subtitle').textContent = v.id + ' · ' + v.direccion;
+
+  const stepsEl = document.getElementById('d-steps');
+  stepsEl.innerHTML = '';
+  ESTADOS.forEach((s, i) => {
+    if (i > 0) { const line = document.createElement('div'); line.className = 'step-line ' + (i <= idx ? 'done' : 'pending'); stepsEl.appendChild(line); }
+    const step = document.createElement('div'); step.className = 'step';
+    const circle = document.createElement('div');
+    circle.className = 'step-circle ' + (i < idx ? 'done' : i === idx ? 'current' : 'pending');
+    circle.textContent = i < idx ? '✓' : (s.pct !== null ? s.pct + '%' : s.icon);
+    const label = document.createElement('div'); label.className = 'step-label'; label.textContent = s.name;
+    step.appendChild(circle); step.appendChild(label); stepsEl.appendChild(step);
+  });
+
+  const hist = v.historial || [];
+  document.getElementById('d-historial').innerHTML = hist.slice().reverse().map(h => {
+    const he = ESTADOS[estadoIdx(h.estado)] || ESTADOS[0];
+    return `<div style="padding:13px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:flex-start;">
+      <span style="font-size:16px">${he.icon}</span>
+      <div style="flex:1"><div style="font-size:13px; font-weight:600; color:var(--ink)">${he.name} — ${he.pct}%</div>
+      <div style="font-size:11.5px; color:var(--ink3)">${h.fecha} · ${h.resp || '—'} · ${h.obs}</div></div>
+    </div>`;
+  }).join('') || '<div style="padding:16px; color:var(--ink3); font-size:12.5px;">Sin relevamientos aún</div>';
+
+  // Block de notas cronológico
+  const notas = v.notas || [];
+  const notasEl = document.getElementById('d-notas');
+  if (notas.length === 0) {
+    notasEl.innerHTML = '<div style="padding:16px; color:var(--ink3); font-size:12.5px;">Sin notas cargadas. Agregá observaciones al registrar un avance.</div>';
+  } else {
+    notasEl.innerHTML = notas.slice().reverse().map(n => `
+      <div style="padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:flex-start;">
+        <div style="flex-shrink:0; text-align:center; min-width:44px;">
+          <div style="font-size:11px; font-weight:700; color:var(--accent)">${n.fecha}</div>
+          <div style="font-size:10px; color:var(--ink3)">${n.hora||''}</div>
+        </div>
+        <div style="flex:1; border-left:2px solid var(--line); padding-left:12px;">
+          <div style="font-size:12.5px; color:var(--ink); line-height:1.5">${n.texto}</div>
+          <div style="font-size:10.5px; color:var(--ink3); margin-top:4px">${n.resp||''} · ${ESTADOS[estadoIdx(n.estado)]?.name||n.estado}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  const btn = document.getElementById('d-btn');
+  btn.textContent = '+ Registrar nuevo avance / fotos';
+  btn.disabled = false;
+  navigate('detail');
+}
+
+function openRelevamiento() {
+  photosCaptured = [];
+  // Pre-seleccionar el estado actual (permite agregar fotos sin avanzar)
+  selectedState = currentAcre.estado || ESTADOS[0].key;
+  renderStateOptions(); renderResponsableSelect(); renderPhotos();
+  document.getElementById('obsInput').value = '';
+  updateSendBtn();
+  navigate('relev');
+}
+
+function renderResponsableSelect() {
+  const sel = document.getElementById('respSelect');
+  const actual = currentAcre.responsable || RESPONSABLES[0];
+  sel.innerHTML = RESPONSABLES.map(r => `<option value="${r}" ${r === actual ? 'selected' : ''}>${r}</option>`).join('') + `<option value="__nuevo__">+ Agregar nuevo responsable...</option>`;
+  sel.onchange = () => {
+    if (sel.value === '__nuevo__') {
+      const nuevo = prompt('Nombre o iniciales del nuevo responsable:');
+      if (nuevo && nuevo.trim()) {
+        const n = nuevo.trim().toUpperCase();
+        if (!RESPONSABLES.includes(n)) { RESPONSABLES.push(n); DB.set('responsables', RESPONSABLES); }
+        renderResponsableSelect(); sel.value = n;
+      } else { sel.value = actual; }
+    }
+  };
+}
+
+function renderStateOptions() {
+  const el = document.getElementById('stateOptions');
+  // Mostrar TODOS los estados, marcando el actual con un indicador especial
+  const estadoActualKey = currentAcre.estado;
+  el.innerHTML = ESTADOS.map(s => {
+    const sel = s.key === selectedState;
+    const esActual = s.key === estadoActualKey;
+    return `<div class="state-option ${sel?'selected':''}" onclick="selectState('${s.key}')">
+      <span class="state-option-icon">${s.icon}</span>
+      <div>
+        <div class="state-option-name">${s.name} ${esActual ? '<span style="font-size:10px;color:var(--accent);font-weight:700">← actual</span>' : ''}</div>
+        <div class="state-option-pct">${s.pct}% · fotos en carpeta ${s.folder}</div>
+      </div>
+      <div class="state-option-check">${sel?'✓':''}</div>
+    </div>`;
+  }).join('');
+}
+function selectState(key) { selectedState = key; renderStateOptions(); updateSendBtn(); }
+
+// ═══════════════════════════════════════════════════════════
+// CÁMARA CONTROLADA — getUserMedia en lugar de input nativo
+// La app de Cámara del fabricante (la que abre capture="environment")
+// usa la resolución máxima de fábrica y eso revienta la memoria en
+// celulares de gama baja. Con getUserMedia pedimos nosotros mismos
+// una resolución chica desde el arranque: la foto nunca pesa de más.
+// ═══════════════════════════════════════════════════════════
+let cameraStream = null;
+
+function addPhoto() {
+  abrirCamaraOverlay();
+}
+
+async function abrirCamaraOverlay() {
+  const overlay = document.getElementById('cameraOverlay');
+  const video = document.getElementById('cameraVideo');
+  const errorBox = document.getElementById('cameraError');
+
+  overlay.style.display = 'flex';
+  video.style.display = 'block';
+  errorBox.style.display = 'none';
+  document.getElementById('btnCapturar').style.display = 'block';
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width:  { ideal: 800, max: 1024 },
+        height: { ideal: 600, max: 768 },
+      },
+      audio: false,
+    });
+    video.srcObject = cameraStream;
+  } catch (err) {
+    video.style.display = 'none';
+    errorBox.style.display = 'flex';
+    document.getElementById('btnCapturar').style.display = 'none';
+    if (err.name === 'NotAllowedError') {
+      document.getElementById('cameraErrorText').textContent = 'Necesitamos permiso de cámara. Activalo en la configuración del navegador.';
+    } else {
+      document.getElementById('cameraErrorText').textContent = 'No se pudo abrir la cámara en este dispositivo.';
+    }
+    console.error('Error abriendo cámara:', err);
+  }
+}
+
+function cerrarCamaraOverlay() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  document.getElementById('cameraOverlay').style.display = 'none';
+}
+
+async function capturarFotoOverlay() {
+  const video = document.getElementById('cameraVideo');
+  const canvas = document.getElementById('cameraCanvas');
+
+  if (!video.videoWidth) {
+    showToast('Esperá un instante a que cargue la cámara');
+    return;
+  }
+
+  const tempId = 'temp_' + Date.now();
+  photosCaptured.push({ id: tempId, loading: true });
+  renderPhotos();
+
+  try {
+    // Capturamos el frame actual del video — esto es liviano porque
+    // el stream ya viene en resolución chica desde el origen.
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((b) => b ? resolve(b) : reject(new Error('No se generó la imagen')), 'image/jpeg', 0.75);
+    });
+
+    const photoId = 'foto_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+    await IDB.guardarFoto(photoId, blob);
+    const previewUrl = URL.createObjectURL(blob);
+
+    const idx = photosCaptured.findIndex(p => p.id === tempId);
+    if (idx >= 0) photosCaptured[idx] = { id: photoId, previewUrl, size: blob.size };
+    renderPhotos();
+    updateSendBtn();
+
+    // liberar memoria del canvas inmediatamente
+    canvas.width = 0; canvas.height = 0;
+
+    cerrarCamaraOverlay();
+    showToast('Foto guardada ✓');
+
+  } catch (err) {
+    photosCaptured = photosCaptured.filter(p => p.id !== tempId);
+    renderPhotos();
+    showToast('No se pudo guardar la foto, probá de nuevo');
+    console.error(err);
+    cerrarCamaraOverlay();
+  }
+}
+
+async function removePhoto(i) {
+  const photo = photosCaptured[i];
+  if (photo && photo.id && !photo.loading) { await IDB.borrarFoto(photo.id); if (photo.previewUrl) URL.revokeObjectURL(photo.previewUrl); }
+  photosCaptured.splice(i, 1);
+  renderPhotos(); updateSendBtn();
+}
+
+function renderPhotos() {
+  const zone = document.getElementById('photoZone');
+  zone.innerHTML = '';
+  const slots = Math.max(3, photosCaptured.length + (photosCaptured.length < 6 ? 1 : 0));
+  for (let i = 0; i < Math.min(slots, 6); i++) {
+    if (i < photosCaptured.length) {
+      const p = photosCaptured[i];
+      if (p.loading) zone.innerHTML += `<div class="photo-loading">⏳</div>`;
+      else zone.innerHTML += `<div class="photo-taken" onclick="removePhoto(${i})"><img src="${p.previewUrl}" alt="foto"><div class="photo-taken-badge">✕</div></div>`;
+    } else {
+      zone.innerHTML += `<div class="photo-add" onclick="addPhoto()"><div class="photo-add-icon">📷</div><div class="photo-add-label">Agregar</div></div>`;
+    }
+  }
+  const count = photosCaptured.filter(p => !p.loading).length;
+  document.getElementById('photoCount').textContent = `${count} de 2 mínimas${count >= 2 ? ' ✓' : ''}`;
+  document.getElementById('photoCount').style.color = count >= 2 ? 'var(--green)' : 'var(--ink3)';
+}
+
+function updateSendBtn() {
+  const btn = document.getElementById('sendBtn');
+  const count = photosCaptured.filter(p => !p.loading).length;
+  const stillLoading = photosCaptured.some(p => p.loading);
+  const ok = count >= 2 && selectedState && !stillLoading;
+  btn.disabled = !ok;
+  btn.textContent = stillLoading ? 'Procesando foto...' : ok ? `Enviar relevamiento (${count} fotos)` : `Faltan ${count < 2 ? (2-count) + ' foto(s)' : 'datos'}`;
+}
+
+async function sendRelevamiento() {
+  const acres = DB.get('acres', []);
+  const v = acres.find(x => x.id === currentId);
+  const e = ESTADOS[estadoIdx(selectedState)];
+  const obs = document.getElementById('obsInput').value.trim() || '';
+  const resp = document.getElementById('respSelect').value;
+  const fecha = new Date().toISOString().split('T')[0];
+  const fechaLabel = fecha.replace(/-/g,'');
+
+  // Actualizar estado del acre
+  v.estado = selectedState;
+  v.responsable = resp;
+  v.nota = 'Actualizado ' + new Date().toLocaleDateString('es-AR');
+
+  // Block de notas: historial cronológico de observaciones
+  v.historial = v.historial || [];
+  v.historial.push({ estado: selectedState, fecha, obs: obs || 'Sin observaciones', resp });
+
+  // Si hay observación, agregarla al bloque de notas general
+  if (obs) {
+    v.notas = v.notas || [];
+    v.notas.push({ fecha, hora: new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}), texto: obs, resp, estado: selectedState });
+  }
+
+  DB.set('acres', acres);
+
+  // Carpeta Drive: 01_VEREDAS / AA0252_Azcuenaga_403 / 25_APERTURA / 20260619
+  const folderPath = `${CONFIG.DRIVE_FOLDER_NAME}/${currentId}_${v.dir?.replace(/[^a-zA-Z0-9]/g,'_')||currentId}/${e.folder}/${fechaLabel}`;
+
+  const pendientes = DB.get('pendientes', []);
+  const syncId = 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  const entry = {
+    syncId, acreId: currentId, estadoNuevo: selectedState,
+    observaciones: obs, responsable: resp,
+    fotoIds: photosCaptured.map(p => p.id),
+    fotosCount: photosCaptured.length,
+    fecha: new Date().toISOString(),
+    sincronizado: false,
+    driveFolder: folderPath,
+  };
+  pendientes.push(entry);
+  DB.set('pendientes', pendientes);
+
+  // Pantalla de éxito
+  document.getElementById('s-code').textContent = v.id;
+  document.getElementById('s-estado').textContent = e.name + ' — ' + e.pct + '%';
+  document.getElementById('s-folder').textContent = e.folder + '/' + fechaLabel;
+  document.getElementById('s-fotos').textContent = photosCaptured.length + ' guardadas ✓';
+  document.getElementById('s-hora').textContent = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit'});
+  document.getElementById('successTitle').textContent = '¡Relevamiento guardado!';
+
+  // Auto-sync si Drive ya está conectado
+  if (CONFIG.DRIVE_CONNECTED && getDriveToken()) {
+    document.getElementById('successSub').textContent = 'Subiendo fotos a Drive automáticamente...';
+    navigate('success');
+    renderHome();
+    // Sync en background
+    setTimeout(() => syncToDrive(), 500);
+  } else {
+    document.getElementById('successSub').textContent = 'Guardado en tu celular. Conectá Drive en la pestaña Sync para subir las fotos.';
+    navigate('success');
+    renderHome();
+  }
+}
+
+function goHomeFromSuccess() { switchTab('home', findTab('home')); }
+
+function simulateQRScan() {
+  const acres = DB.get('acres', []);
+  const v = acres[Math.floor(Math.random()*acres.length)];
+  triggerNotif(`QR detectado: ${v.id} · ${v.direccion}`);
+  setTimeout(() => openDetail(v.id), 900);
+}
+
+async function renderSync() {
+  const pendientes = DB.get('pendientes', []);
+  const pend = pendientes.filter(p => !p.sincronizado);
+  const done = pendientes.filter(p => p.sincronizado);
+  const totalFotos = await IDB.contarFotos();
+  const totalBytes = await IDB.tamanoTotal();
+  const mb = (totalBytes / (1024*1024)).toFixed(1);
+
+  let html = '';
+  html += `<div style="padding:16px;">
+    <div style="background:${CONFIG.DRIVE_CONNECTED ? 'var(--green2)' : 'var(--bg4)'}; border-radius:14px; padding:16px; display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+      <span style="font-size:28px">${CONFIG.DRIVE_CONNECTED ? '✅' : '📦'}</span>
+      <div><div style="font-size:15px; font-weight:700; color:${CONFIG.DRIVE_CONNECTED ? 'var(--green)' : 'var(--ink)'}">${CONFIG.DRIVE_CONNECTED ? 'Conectado a Drive' : 'Modo local'}</div>
+      <div style="font-size:12px; opacity:0.7">${CONFIG.DRIVE_CONNECTED ? 'Subiendo fotos automáticamente' : `${totalFotos} fotos · ${mb} MB en este celular`}</div></div>
+    </div>
+  </div>`;
+
+  // Log de diagnóstico (persiste entre renders)
+  html += `<div id="syncLog" style="background:#000;border:1px solid #333;border-radius:12px;padding:14px;margin:0 16px 16px;font-family:monospace;font-size:11px;color:#4caf50;white-space:pre-wrap;word-break:break-all;max-height:250px;overflow-y:auto;display:none;"></div>`;
+
+  html += `<div class="section-title" style="padding:0 16px 4px">Cola pendiente (${pend.length})</div>`;
+  if (pend.length === 0) {
+    html += `<div style="background:var(--bg2); border-radius:14px; padding:20px; text-align:center; color:var(--ink3); margin:0 16px 16px;">
+      <div style="font-size:32px; margin-bottom:8px">📭</div><div style="font-size:14px; font-weight:600; color:var(--ink)">Sin pendientes</div>
+      <div style="font-size:12px; margin-top:4px">Todo guardado correctamente</div></div>`;
+  } else {
+    html += `<div class="card" style="margin:0 16px 16px">`;
+    pend.forEach(p => {
+      html += `<div style="padding:13px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center;">
+        <span style="font-size:16px">⏳</span>
+        <div style="flex:1; min-width:0"><div style="font-size:13px; font-weight:600; color:var(--ink)">${p.acreId}</div>
+        <div style="font-size:11px; color:var(--ink3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${p.fotosCount} fotos → ${p.driveFolder}</div></div>
+        <span style="font-size:11px; color:var(--yellow); font-weight:600; flex-shrink:0">Local</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (done.length > 0) {
+    html += `<div class="section-title" style="padding:0 16px 4px">Sincronizados (${done.length})</div><div class="card" style="margin:0 16px 16px">`;
+    done.slice(-5).reverse().forEach(p => {
+      html += `<div style="padding:13px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center;">
+        <span style="font-size:16px">✅</span><div style="flex:1"><div style="font-size:13px; font-weight:600; color:var(--ink)">${p.acreId}</div>
+        <div style="font-size:11.5px; color:var(--ink3)">${p.fotosCount} fotos${p.sinFotos?' (sin fotos en celular)':''}</div></div>
+        <span style="font-size:11px; color:var(--green); font-weight:600">Enviado</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div style="padding:0 16px 24px; display:flex; flex-direction:column; gap:10px;">
+    <button class="btn-main" onclick="trySync()">${CONFIG.DRIVE_CONNECTED ? '↻ Sincronizar ahora' : '☁️ Conectar Google Drive'}</button>
+  </div>`;
+
+  // Panel de configuración Google Sheets
+  const sheetIdActual = localStorage.getItem('cfg_sheet_id') || '';
+  const sheetNameActual = localStorage.getItem('cfg_sheet_name') || 'PLANILLAMADRE';
+  html += `<div style="margin:0 16px 24px; background:var(--bg2,#f5f5f5); border-radius:14px; padding:16px;">
+    <div style="font-size:13px; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+      <span>📊</span> Planilla Madre — Google Sheets
+      <span style="margin-left:auto; font-size:10px; font-weight:400; color:var(--ink3,#888); background:${sheetIdActual?'rgba(76,175,80,.15)':'rgba(0,0,0,.06)'}; padding:2px 8px; border-radius:8px;">${sheetIdActual ? '✓ Configurado' : 'Sin configurar'}</span>
+    </div>
+    <div style="font-size:12px; color:var(--ink3,#888); margin-bottom:10px; line-height:1.5">
+      Al sincronizar, actualiza automáticamente estado, % y fechas en la planilla.<br>
+      Pegá el ID de la Sheet (el código largo en la URL de Google Sheets).
+    </div>
+    <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink3,#888); display:block; margin-bottom:4px">ID de la Google Sheet</label>
+    <input id="inputSheetId" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
+      value="${sheetIdActual}"
+      style="width:100%; padding:10px 12px; border:1.5px solid var(--line,#ddd); border-radius:8px; font-size:12px; background:var(--bg,#fff); color:var(--ink,#333); margin-bottom:10px; box-sizing:border-box; font-family:monospace">
+    <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink3,#888); display:block; margin-bottom:4px">Nombre de la hoja (pestaña)</label>
+    <input id="inputSheetName" type="text" placeholder="PLANILLAMADRE"
+      value="${sheetNameActual}"
+      style="width:100%; padding:10px 12px; border:1.5px solid var(--line,#ddd); border-radius:8px; font-size:12px; background:var(--bg,#fff); color:var(--ink,#333); margin-bottom:12px; box-sizing:border-box">
+    <button onclick="guardarConfigSheets()" style="width:100%; padding:11px; background:#1a73e8; color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+      💾 Guardar configuración Sheets
+    </button>
+    ${sheetIdActual ? `<button onclick="testSheets()" style="width:100%; margin-top:8px; padding:10px; background:transparent; color:#1a73e8; border:1.5px solid #1a73e8; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+      🧪 Probar conexión Sheets
+    </button>` : ''}
+  </div>`;
+
+  document.getElementById('syncContent').innerHTML = html;
+}
+
+// Log visible en pantalla durante sync
+function syncLog(msg, color) {
+  const el = document.getElementById('syncLog');
+  if (!el) return;
+  el.style.display = 'block';
+  const line = document.createElement('div');
+  line.style.color = color || '#4caf50';
+  line.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function trySync() {
+  syncToDrive();
+}
+
+function guardarConfigSheets() {
+  const id = (document.getElementById('inputSheetId')?.value || '').trim();
+  const name = (document.getElementById('inputSheetName')?.value || '').trim() || 'PLANILLAMADRE';
+  if (!id) { showToast('Ingresá el ID de la Sheet'); return; }
+  localStorage.setItem('cfg_sheet_id', id);
+  localStorage.setItem('cfg_sheet_name', name);
+  CONFIG.SHEET_ID = id;
+  CONFIG.SHEET_NAME = name;
+  showToast('✓ Configuración de Sheets guardada');
+  renderSync();
+}
+
+async function testSheets() {
+  const token = getDriveToken();
+  if (!token) { showToast('Primero conectá Google Drive'); return; }
+  const sheetId = CONFIG.SHEET_ID || localStorage.getItem('cfg_sheet_id');
+  if (!sheetId) { showToast('Configurá el ID de la Sheet primero'); return; }
+  const sheetName = CONFIG.SHEET_NAME || localStorage.getItem('cfg_sheet_name') || 'PLANILLAMADRE';
+  showToast('Probando conexión...');
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName + '!A1:A5')}`;
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) {
+      const err = await res.json();
+      showToast('✗ Error: ' + (err.error?.message || res.status));
+      return;
+    }
+    const data = await res.json();
+    const primeros = (data.values || []).map(r => r[0]).filter(Boolean).join(', ');
+    showToast('✓ Conexión OK — Primeros IDs: ' + (primeros || '(vacío)'));
+  } catch(e) {
+    showToast('✗ ' + e.message);
+  }
+}
+
+async function renderProfile() {
+  const pendientes = DB.get('pendientes', []);
+  const totalFotos = await IDB.contarFotos();
+  const totalBytes = await IDB.tamanoTotal();
+  document.getElementById('profileStatsRelev').textContent = pendientes.length;
+  document.getElementById('profileStatsFotos').textContent = totalFotos;
+  document.getElementById('profileStorageUsed').textContent = (totalBytes/(1024*1024)).toFixed(1) + ' MB';
+  document.getElementById('profileModeChip').textContent = CONFIG.DRIVE_CONNECTED ? '🟢 Conectado a Drive' : '📦 Modo local';
+  document.getElementById('profileServerStatus').textContent = CONFIG.DRIVE_CONNECTED ? 'Conectado' : 'No conectado';
+}
+
+function updateConnBanner() {
+  const banner = document.getElementById('connBanner');
+  const modeEl = document.getElementById('modeBadge');
+  const profileMode = document.getElementById('profileModeChip');
+  const serverStatus = document.getElementById('profileServerStatus');
+  if (CONFIG.DRIVE_CONNECTED) {
+    banner.classList.add('hidden');
+    if (modeEl) modeEl.innerHTML = '🟢 Drive';
+    if (profileMode) profileMode.textContent = '🟢 Drive conectado';
+    if (serverStatus) serverStatus.textContent = 'Conectado';
+  } else {
+    banner.className = 'conn-banner offline';
+    banner.textContent = '📦 Modo local — tocá Sync → Conectar Drive para subir fotos';
+    if (modeEl) modeEl.innerHTML = '📦 Local';
+    if (profileMode) profileMode.textContent = '📦 Modo local';
+    if (serverStatus) serverStatus.textContent = 'No conectado';
+  }
+}
+
+let notifTimer;
+function triggerNotif(text) {
+  const el = document.getElementById('notif');
+  document.getElementById('notifText').textContent = text;
+  el.classList.remove('gone');
+  clearTimeout(notifTimer);
+  notifTimer = setTimeout(() => el.classList.add('gone'), 3500);
+}
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toastBanner');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); deferredPrompt = e;
+  setTimeout(() => document.getElementById('installPrompt').classList.add('show'), 4000);
+});
+function installApp() { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; } dismissInstall(); }
+function dismissInstall() { document.getElementById('installPrompt').classList.remove('show'); }
+</script>
+</body>
+</html>
