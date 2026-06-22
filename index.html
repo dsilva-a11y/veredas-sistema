@@ -1384,7 +1384,12 @@ async function renderHome() {
 
   // Filtrar por responsable asignado (usar campo resp, comparación case-insensitive)
   const nombreUpper = user.nombre.toUpperCase().trim();
-  const misAcres = esAdmin ? acres : acres.filter(a => (a.resp || a.responsable || '').toUpperCase().trim() === nombreUpper);
+  const misAcres = esAdmin ? acres : acres.filter(a => {
+    // Excluir ejecutados y anulados
+    if (a.estado === 'EJECUTADO' || a.estado === 'ANULADA') return false;
+    // Solo los del responsable
+    return (a.resp || a.responsable || '').toUpperCase().trim() === nombreUpper;
+  });
 
   document.getElementById('statAsignadas').textContent = misAcres.length;
   document.getElementById('statPendientes').textContent = misAcres.filter(v => v.estado !== 'EJECUTADO').length;
