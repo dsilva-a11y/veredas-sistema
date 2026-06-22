@@ -713,27 +713,52 @@ async function publicarAsignaciones() {
   if (!driveToken) { loginDrive('publish'); return; }
   updateSyncBar('Publicando asignaciones...', 'var(--yellow)');
   try {
-    // Exportar solo los campos de asignación como SYNC_UPDATES.json
-    const updates = ALL.map(a => ({
-      id: a.id,
-      estado: a.estado,
-      pct: a.pct,
-      resp: a.resp || '',
-      obs: a.obs || '',
-      obs_g: a.obs_g || '',
-      f_prog: a.f_prog || null,
-      f_aper: a.f_aper || null,
-      f_horm: a.f_horm || null,
-      f_col: a.f_col || null,
-      f_fin: a.f_fin || null,
-      f_med: a.f_med || null,
-    }));
+    // Primero leer el SYNC_UPDATES actual para no pisar datos del inspector
     const q = `name='SYNC_UPDATES.json' and trashed=false`;
     const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
       headers: { Authorization: 'Bearer ' + driveToken }
     });
     const sd = await sr.json();
     const existingId = sd.files?.[0]?.id || null;
+
+    let existingData = {};
+    if (existingId) {
+      try {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${existingId}?alt=media`, {
+          headers: { Authorization: 'Bearer ' + driveToken }
+        });
+        if (r.ok) {
+          const arr = await r.json();
+          if (Array.isArray(arr)) arr.forEach(u => { existingData[u.id] = u; });
+        }
+      } catch(e) {}
+    }
+
+    // Fusionar: backoffice gana en resp/asignación, inspector gana en pct/estado si es mayor
+    const updates = ALL.map(a => {
+      const existing = existingData[a.id];
+      const inspectorPct = existing ? Number(existing.pct || 0) : 0;
+      const backofficePct = Number(a.pct || 0);
+      // El pct más alto gana (inspector no puede retroceder)
+      const finalPct = Math.max(inspectorPct, backofficePct);
+      const finalEstado = finalPct >= 100 ? 'EJECUTADO' :
+                          finalPct > 0 ? 'EN EJECUCION' :
+                          (a.estado || '-');
+      return {
+        id: a.id,
+        estado: a.estado === 'ANULADA' ? 'ANULADA' : finalEstado,
+        pct: a.estado === 'ANULADA' ? 0 : finalPct,
+        resp: a.resp || '',
+        obs: existing?.obs || a.obs || '',
+        obs_g: a.obs_g || '',
+        f_prog: existing?.f_prog || a.f_prog || null,
+        f_aper: existing?.f_aper || a.f_aper || null,
+        f_horm: existing?.f_horm || a.f_horm || null,
+        f_col: existing?.f_col || a.f_col || null,
+        f_fin: existing?.f_fin || a.f_fin || null,
+        f_med: existing?.f_med || a.f_med || null,
+      };
+    });
     if (existingId) {
       await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`, {
         method: 'PATCH',
