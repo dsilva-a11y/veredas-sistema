@@ -1823,9 +1823,20 @@ async function renderSync() {
 
   html += `<div style="padding:0 16px 24px; display:flex; flex-direction:column; gap:10px;">
     <button class="btn-main" onclick="trySync()">${CONFIG.DRIVE_CONNECTED ? '↻ Sincronizar ahora' : '☁️ Conectar Google Drive'}</button>
+    ${CONFIG.DRIVE_CONNECTED ? `<button style="padding:12px;background:var(--bg2);border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer" onclick="actualizarAsignaciones()">📥 Actualizar mis asignaciones</button>` : ''}
   </div>`;
 
     document.getElementById('syncContent').innerHTML = html;
+}
+
+async function actualizarAsignaciones() {
+  const btn = event.target;
+  btn.textContent = '⏳ Leyendo Drive...';
+  btn.disabled = true;
+  await leerAsignacionesDrive();
+  btn.textContent = '✓ Asignaciones actualizadas';
+  setTimeout(() => { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }, 2000);
+  renderHome();
 }
 
 // Log visible en pantalla durante sync
