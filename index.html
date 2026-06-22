@@ -1142,15 +1142,16 @@ async function leerAsignacionesDrive() {
       }
     });
 
+    // Guardar solo los frentes del usuario para no llenar localStorage
+    const user = DB.get('usuario', { nombre: 'Inspector' });
+    const nombre = user.nombre.toUpperCase().trim();
+    const misAcres = acres.filter(a => (a.resp||'').toUpperCase().trim() === nombre);
+    
     try {
-      DB.set('acres', acres);
+      DB.set('acres', misAcres);
       renderHome();
     } catch(e) {
-      // localStorage lleno — guardar solo los del usuario
-      const user = DB.get('usuario', { nombre: 'Inspector' });
-      const nombre = user.nombre.toUpperCase().trim();
-      const misAcres = acres.filter(a => (a.resp||'').toUpperCase().trim() === nombre);
-      try { DB.set('acres', misAcres); } catch(e2) {}
+      console.log('Error guardando acres:', e.message);
       renderHome();
     }
   } catch(e) {
