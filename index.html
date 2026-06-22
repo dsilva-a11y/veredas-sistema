@@ -1157,7 +1157,20 @@ async function leerAsignacionesDrive() {
       }
     });
     if (changed > 0) {
-      DB.set('acres', acres);
+      try {
+        DB.set('acres', acres);
+      } catch(storageErr) {
+        // localStorage lleno — guardar solo los acres del usuario actual
+        const user = DB.get('usuario', { nombre: 'Inspector' });
+        const nombreUpper = user.nombre.toUpperCase().trim();
+        const misAcres = acres.filter(a =>
+          (a.resp || '').toUpperCase().trim() === nombreUpper ||
+          a.estado === 'EN EJECUCION' ||
+          a.estado === '-' ||
+          a.estado === 'A EJECUTAR'
+        );
+        try { DB.set('acres', misAcres); } catch(e2) {}
+      }
       renderHome();
     }
   } catch(e) {
