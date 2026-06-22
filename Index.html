@@ -6,6 +6,8 @@
 <title>VEREDAS · Backoffice CONSTRUMEX</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Instrument+Sans:wght@300;400;500;600&display=swap');
 :root{
@@ -212,7 +214,8 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <div class="nl">Gestión</div>
     <div class="ni" onclick="goTo('cert',this)">📐 &nbsp;Certificación mensual</div>
     <div class="ni" onclick="goTo('dash',this)">⬛ &nbsp;Dashboard m²</div>
-    <div class="ni" onclick="goTo('lista',this)">🗺️ &nbsp;Listado de frentes &nbsp;<span class="nb" id="nb-total">0</span></div>
+    <div class="ni" onclick="goTo('mapa',this)">🗺️ &nbsp;Mapa de frentes</div>
+    <div class="ni" onclick="goTo('lista',this)">📋 &nbsp;Listado de frentes &nbsp;<span class="nb" id="nb-total">0</span></div>
     <div class="nl">Filtros rápidos</div>
     <div class="ni" onclick="qf('EN EJECUCION',this)">🟡 &nbsp;En ejecución &nbsp;<span class="nb y" id="nb-ei">0</span></div>
     <div class="ni" onclick="qf('A EJECUTAR',this)">🔵 &nbsp;A ejecutar &nbsp;<span class="nb b" id="nb-ae">0</span></div>
@@ -382,6 +385,52 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
               </tr></thead>
               <tbody id="certMatBody"></tbody>
             </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MAPA ══ -->
+    <div id="page-mapa" class="page">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-family:var(--fh);font-size:16px;font-weight:700">Mapa de frentes</div>
+          <div style="font-size:11px;color:var(--text3)" id="mapaSubtitle">Cargando...</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <!-- Filtros de estado -->
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;border-radius:20px;border:1.5px solid var(--yellow);background:var(--bg2)" id="chkEjecLabel">
+            <input type="checkbox" id="chkEjec" checked onchange="renderMapa()">
+            <span style="width:10px;height:10px;border-radius:50%;background:#f0c050;display:inline-block"></span> En ejecución
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;border-radius:20px;border:1.5px solid var(--blue);background:var(--bg2)" id="chkProgLabel">
+            <input type="checkbox" id="chkProg" checked onchange="renderMapa()">
+            <span style="width:10px;height:10px;border-radius:50%;background:#4fa3e8;display:inline-block"></span> A ejecutar/Prog.
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:5px 10px;border-radius:20px;border:1.5px solid var(--line);background:var(--bg2)" id="chkPendLabel">
+            <input type="checkbox" id="chkPend" onchange="renderMapa()">
+            <span style="width:10px;height:10px;border-radius:50%;background:#aaa;display:inline-block"></span> Sin iniciar
+          </label>
+          <select id="mapaResp" class="sf" onchange="renderMapa()" style="font-size:12px">
+            <option value="">Todos los resp.</option>
+          </select>
+          <button class="btn bp" onclick="geocodificarTodos()" id="btnGeo" style="font-size:11px">📍 Geocodificar</button>
+        </div>
+      </div>
+      <!-- Leyenda -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:var(--text3)">
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#e8623a;margin-right:4px;vertical-align:middle"></span>75%+ Colocación</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#f0c050;margin-right:4px;vertical-align:middle"></span>50% Hormigonado</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#4fa3e8;margin-right:4px;vertical-align:middle"></span>25% Apertura</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#9e9e9e;margin-right:4px;vertical-align:middle"></span>Programado/Sin iniciar</span>
+      </div>
+      <div id="mapaContainer" style="height:calc(100vh - 220px);border-radius:8px;border:1px solid var(--line);overflow:hidden;position:relative">
+        <div id="mapaDiv" style="height:100%;width:100%"></div>
+        <div id="mapaLoader" style="position:absolute;inset:0;background:var(--bg1);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:1000">
+          <div style="font-size:32px">🗺️</div>
+          <div id="mapaLoaderMsg" style="font-size:13px;color:var(--text3)">Iniciando mapa...</div>
+          <div id="mapaProgressBar" style="width:200px;height:4px;background:var(--line);border-radius:2px;display:none">
+            <div id="mapaProgress" style="height:100%;width:0%;background:var(--accent);border-radius:2px;transition:width .3s"></div>
           </div>
         </div>
       </div>
@@ -1189,6 +1238,167 @@ function exportHorm(){
   const el=document.createElement('a');el.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);el.download='hormigon_'+dateKey+'.csv';el.click();
 }
 
+// ─── MÓDULO MAPA ─────────────────────────────────────────────────
+let mapaInstance = null;
+let mapaMarkers = [];
+const geocacheKey = 'previal_geocache_v1';
+
+function getGeoCache() {
+  try { return JSON.parse(localStorage.getItem(geocacheKey) || '{}'); } catch(e) { return {}; }
+}
+function saveGeoCache(cache) {
+  try { localStorage.setItem(geocacheKey, JSON.stringify(cache)); } catch(e) {}
+}
+
+function markerColor(a) {
+  const pct = Number(a.pct || 0);
+  if (pct >= 75) return '#e8623a';
+  if (pct >= 50) return '#f0c050';
+  if (pct >= 25) return '#4fa3e8';
+  if (pct >= 1)  return '#7ec8e3';
+  return '#9e9e9e';
+}
+
+function markerIcon(a) {
+  const color = markerColor(a);
+  const pct = Number(a.pct || 0);
+  const label = pct > 0 ? pct + '%' : '·';
+  return L.divIcon({
+    html: `<div style="background:${color};color:#fff;font-size:9px;font-weight:700;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,.4)">${label}</div>`,
+    className: '',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15]
+  });
+}
+
+async function geocodificarDireccion(dir, alt) {
+  const query = `${dir} ${alt}, Buenos Aires, Argentina`;
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=ar`);
+    const d = await r.json();
+    if (d && d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+  } catch(e) {}
+  return null;
+}
+
+async function geocodificarTodos() {
+  const btn = document.getElementById('btnGeo');
+  btn.disabled = true;
+  btn.textContent = '⏳ Geocodificando...';
+  document.getElementById('mapaLoader').style.display = 'flex';
+
+  const activos = ALL.filter(a =>
+    a.dir && a.dir.trim() &&
+    !['EJECUTADO','ANULADA'].includes(a.estado) &&
+    Number(a.pct||0) < 100 &&
+    (a.resp||'').trim() // Solo asignados
+  );
+
+  const cache = getGeoCache();
+  const pendientes = activos.filter(a => !cache[a.id]);
+
+  document.getElementById('mapaProgressBar').style.display = 'block';
+  let done = 0;
+
+  for (const a of pendientes) {
+    const coords = await geocodificarDireccion(a.dir, a.alt);
+    if (coords) cache[a.id] = coords;
+    done++;
+    const pct = Math.round(done/pendientes.length*100);
+    document.getElementById('mapaProgress').style.width = pct + '%';
+    document.getElementById('mapaLoaderMsg').textContent = `Geocodificando ${done}/${pendientes.length} — ${a.dir} ${a.alt}`;
+    await new Promise(r => setTimeout(r, 1100)); // rate limit Nominatim: 1 req/seg
+  }
+
+  saveGeoCache(cache);
+  document.getElementById('mapaLoader').style.display = 'none';
+  document.getElementById('mapaProgressBar').style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = '📍 Actualizar coords';
+  renderMapa();
+  showToast(`${Object.keys(cache).length} frentes con coordenadas`);
+}
+
+function initMapa() {
+  if (!mapaInstance) {
+    mapaInstance = L.map('mapaDiv').setView([-34.610, -58.443], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(mapaInstance);
+  }
+  // Llenar select responsables
+  const sel = document.getElementById('mapaResp');
+  if (sel) sel.innerHTML = '<option value="">Todos los resp.</option>' + RESPS.map(r => `<option value="${r.nombre}">${r.nombre}</option>`).join('');
+
+  document.getElementById('mapaLoader').style.display = 'none';
+  setTimeout(() => { mapaInstance.invalidateSize(); renderMapa(); }, 200);
+}
+
+function renderMapa() {
+  if (!mapaInstance) return;
+
+  mapaMarkers.forEach(m => m.remove());
+  mapaMarkers = [];
+
+  const cache = getGeoCache();
+  const mostrarEjec = document.getElementById('chkEjec')?.checked;
+  const mostrarProg = document.getElementById('chkProg')?.checked;
+  const mostrarPend = document.getElementById('chkPend')?.checked;
+  const filtroResp = document.getElementById('mapaResp')?.value || '';
+
+  const activos = ALL.filter(a => {
+    if (['EJECUTADO','ANULADA'].includes(a.estado)) return false;
+    if (Number(a.pct||0) >= 100) return false;
+    if (!(a.resp||'').trim()) return false; // Solo asignados
+    if (!cache[a.id]) return false;
+    if (filtroResp && (a.resp||'') !== filtroResp) return false;
+    const pct = Number(a.pct||0);
+    if (a.estado==='EN EJECUCION' && !mostrarEjec) return false;
+    if ((a.estado==='A EJECUTAR' || pct===1) && !mostrarProg) return false;
+    if ((a.estado==='-' || pct===0) && !mostrarPend) return false;
+    return true;
+  });
+
+  activos.forEach(a => {
+    const coords = cache[a.id];
+    const marker = L.marker([coords.lat, coords.lng], { icon: markerIcon(a) })
+      .addTo(mapaInstance)
+      .bindPopup(`
+        <div style="min-width:200px;font-family:sans-serif;font-size:12px">
+          <div style="font-weight:700;font-size:14px;color:#e8623a;margin-bottom:4px">${a.id}</div>
+          <div style="font-weight:600;margin-bottom:6px">${a.dir||''} ${a.alt||''}</div>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <span style="background:#333;color:#fff;padding:2px 6px;border-radius:10px;font-size:10px">${a.estado||'—'}</span>
+            <span style="font-weight:700;color:${markerColor(a)}">${a.pct||0}%</span>
+          </div>
+          <div style="font-size:11px;color:#666">Resp: <b>${a.resp||'Sin asignar'}</b></div>
+          <div style="font-size:11px;color:#666">Com: ${a.com||'—'} · ${a.area||0} m²</div>
+          ${a.obs_g?`<div style="font-size:10px;color:#888;margin-top:4px;border-top:1px solid #eee;padding-top:4px">${a.obs_g.slice(0,80)}...</div>`:''}
+          <button onclick="openModal('${a.id}');document.querySelector('.lf-popup-close')?.click()" style="margin-top:6px;width:100%;padding:4px;background:#e8623a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">Ver detalle</button>
+        </div>
+      `);
+    mapaMarkers.push(marker);
+  });
+
+  const sinCoords = ALL.filter(a =>
+    !['EJECUTADO','ANULADA'].includes(a.estado) && 
+    Number(a.pct||0)<100 && 
+    (a.resp||'').trim() &&
+    !cache[a.id]
+  ).length;
+
+  document.getElementById('mapaSubtitle').textContent =
+    `${activos.length} frentes asignados en mapa · ${sinCoords} sin geocodificar${sinCoords>0?' — presioná 📍 Geocodificar':''}`;
+
+  if (mapaMarkers.length > 0) {
+    const group = L.featureGroup(mapaMarkers);
+    mapaInstance.fitBounds(group.getBounds().pad(0.1));
+  }
+  setTimeout(() => mapaInstance.invalidateSize(), 100);
+}
+
 // ─── CERTIFICACION ────────────────────────────────────────────────
 let certMonth='';
 function initCert(){
@@ -1528,7 +1738,7 @@ function closeModal(){document.getElementById('modal').classList.remove('open');
 document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
 
 // ─── NAVIGATION ──────────────────────────────────────────────────
-const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas']};
+const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],mapa:['Mapa de frentes','Frentes activos con geocodificación'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas']};
 function goTo(p,el){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
@@ -1540,6 +1750,7 @@ function goTo(p,el){
   if(p==='hormigon'){document.getElementById('hormInputDate').value=document.getElementById('hormInputDate').value||isoToday();renderHormigon();}
   if(p==='cert')initCert();
   if(p==='dash')initDash();
+  if(p==='mapa')initMapa();
   if(p==='lista'&&!document.getElementById('tbody').children.length)renderTable();
   if(p==='config'){switchConfigTab('asig');}
 }
