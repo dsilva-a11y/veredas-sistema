@@ -1564,7 +1564,7 @@ function mergeAcresData(updates) {
 
 // Exportar ALL como array compacto (solo campos que pueden cambiar)
 function exportAcresData() {
-  const CAMPOS = ['id','estado','pct','resp','obs','obs_g','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
+  const CAMPOS = ['id','dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
   return ALL.map(a => {
     const o = {};
     CAMPOS.forEach(f => o[f] = a[f] ?? null);
