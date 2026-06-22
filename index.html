@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Veredas · Inspector</title>
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiVmVyZWRhcyBJbnNwZWN0b3IiLCJzaG9ydF9uYW1lIjoiVmVyZWRhcyIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjZjJmMGViIiwidGhlbWVfY29sb3IiOiIjMWMxYjE4In0=">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
@@ -276,6 +278,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       <nav class="nav-bar">
         <div class="nav-tab active" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
         
+        <div class="nav-tab" onclick="switchTab('mapa',this)"><span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span></div>
         <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
@@ -298,18 +301,50 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       <nav class="nav-bar">
         <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
         
+        <div class="nav-tab" onclick="switchTab('mapa',this)"><span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span></div>
         <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
     </div>
 
     <!-- SYNC -->
+    <!-- ══ VISTA MAPA ══ -->
+    <div class="view hidden-right" id="view-mapa">
+      <div style="display:flex;flex-direction:column;height:100vh">
+        <!-- Header -->
+        <div style="padding:12px 16px 8px;background:var(--bg1);border-bottom:1px solid var(--line);flex-shrink:0">
+          <div style="font-size:16px;font-weight:700;margin-bottom:2px">Mis frentes</div>
+          <div style="font-size:11px;color:var(--text3)" id="mapaSubtitleApp">Cargando...</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
+            <button onclick="geocodificarApp()" id="btnGeoApp" style="padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer">📍 Cargar en mapa</button>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px">
+              <input type="checkbox" id="mapaShowAll" onchange="renderMapaApp()"> Mostrar 0%
+            </label>
+          </div>
+        </div>
+        <!-- Leyenda -->
+        <div style="padding:6px 16px;background:var(--bg2);border-bottom:1px solid var(--line);display:flex;gap:12px;flex-wrap:wrap;font-size:10px;color:var(--text3);flex-shrink:0">
+          <span>🔴 75%+</span><span>🟡 50%</span><span>🔵 25%</span><span>⚫ &lt;25%</span>
+        </div>
+        <!-- Mapa -->
+        <div id="mapaAppDiv" style="flex:1;width:100%"></div>
+        <!-- Navbar -->
+        <nav class="navbar">
+          <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
+          <div class="nav-tab active" onclick="switchTab('mapa',this)"><span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span></div>
+          <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
+          <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
+        </nav>
+      </div>
+    </div>
+
     <div class="view hidden-right" id="view-sync">
       <div class="header"><div class="header-title">Sincronización</div><div class="header-sub">Estado de fotos y relevamientos</div></div>
       <div class="scroll-area" id="syncContent"></div>
       <nav class="nav-bar">
         <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
         
+        <div class="nav-tab" onclick="switchTab('mapa',this)"><span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span></div>
         <div class="nav-tab active" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
@@ -337,6 +372,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       <nav class="nav-bar">
         <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
         
+        <div class="nav-tab" onclick="switchTab('mapa',this)"><span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span></div>
         <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
         <div class="nav-tab active" onclick="switchTab('profile',this)"><span class="nav-icon">👤</span><span class="nav-label">Perfil</span></div>
       </nav>
@@ -1469,6 +1505,137 @@ function switchTo(id) {
 }
 function navigate(id) { viewStack.push(id); switchTo(id); }
 function goBack(id) { viewStack.pop(); switchTo(id || viewStack[viewStack.length-1] || 'home'); }
+// ─── MAPA DE FRENTES (APP) ───────────────────────────────────────
+let mapaAppInstance = null;
+let mapaAppMarkers = [];
+
+function getGeoCacheApp() {
+  try { return JSON.parse(localStorage.getItem('geo_cache_app') || '{}'); } catch(e) { return {}; }
+}
+function saveGeoCacheApp(c) { localStorage.setItem('geo_cache_app', JSON.stringify(c)); }
+
+async function geocodificarDirApp(dir, alt) {
+  const q = encodeURIComponent(`${dir} ${alt}, Buenos Aires, Argentina`);
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=ar`, {
+      headers: { 'Accept-Language': 'es', 'User-Agent': 'PREVIAL-CONSTRUMEX/1.0' }
+    });
+    const d = await r.json();
+    if (d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+  } catch(e) {}
+  return null;
+}
+
+async function geocodificarApp() {
+  const btn = document.getElementById('btnGeoApp');
+  btn.disabled = true;
+  btn.textContent = '⏳ Geocodificando...';
+  const user = DB.get('usuario', { nombre: 'Inspector' });
+  const acres = DB.get('acres', []);
+  const nombre = user.nombre.toUpperCase().trim();
+  const misAcres = acres.filter(a =>
+    (a.resp||'').toUpperCase().trim() === nombre &&
+    a.estado !== 'EJECUTADO' && a.estado !== 'ANULADA' &&
+    (a.dir||'').trim()
+  );
+  const cache = getGeoCacheApp();
+  const pendientes = misAcres.filter(a => !cache[a.id]);
+  document.getElementById('mapaSubtitleApp').textContent = `Geocodificando 0/${pendientes.length}...`;
+  let done = 0;
+  for (const a of pendientes) {
+    const coords = await geocodificarDirApp(a.dir, a.alt);
+    if (coords) cache[a.id] = coords;
+    done++;
+    document.getElementById('mapaSubtitleApp').textContent = `Geocodificando ${done}/${pendientes.length}...`;
+    await new Promise(r => setTimeout(r, 1100));
+  }
+  saveGeoCacheApp(cache);
+  btn.disabled = false;
+  btn.textContent = '🔄 Actualizar mapa';
+  renderMapaApp();
+}
+
+function markerColorApp(a) {
+  const pct = Number(a.pct||0);
+  if (pct >= 75) return '#e8623a';
+  if (pct >= 50) return '#f0c050';
+  if (pct >= 25) return '#4fa3e8';
+  return '#9e9e9e';
+}
+
+function markerIconApp(a) {
+  const color = markerColorApp(a);
+  const pct = Number(a.pct||0);
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)"></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -28]
+  });
+}
+
+function initMapaApp() {
+  if (!mapaAppInstance) {
+    mapaAppInstance = L.map('mapaAppDiv').setView([-34.610, -58.443], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 19
+    }).addTo(mapaAppInstance);
+  }
+  setTimeout(() => { mapaAppInstance.invalidateSize(); renderMapaApp(); }, 200);
+}
+
+function renderMapaApp() {
+  if (!mapaAppInstance) return;
+  mapaAppMarkers.forEach(m => m.remove());
+  mapaAppMarkers = [];
+  const user = DB.get('usuario', { nombre: 'Inspector' });
+  const acres = DB.get('acres', []);
+  const nombre = user.nombre.toUpperCase().trim();
+  const showAll = document.getElementById('mapaShowAll')?.checked;
+  const cache = getGeoCacheApp();
+  const misAcres = acres.filter(a => {
+    if ((a.resp||'').toUpperCase().trim() !== nombre) return false;
+    if (a.estado === 'EJECUTADO' || a.estado === 'ANULADA') return false;
+    if (!showAll && (Number(a.pct||0) === 0)) return false;
+    return cache[a.id];
+  });
+
+  misAcres.forEach(a => {
+    const c = cache[a.id];
+    const marker = L.marker([c.lat, c.lng], { icon: markerIconApp(a) })
+      .addTo(mapaAppInstance)
+      .bindPopup(`
+        <div style="font-family:sans-serif;font-size:12px;min-width:180px">
+          <div style="font-weight:700;color:#e8623a;margin-bottom:2px">${a.id}</div>
+          <div style="font-weight:600;margin-bottom:4px">${(a.dir||'')} ${(a.alt||'')}</div>
+          <div style="margin-bottom:4px"><b style="color:${markerColorApp(a)}">${a.pct||0}%</b> · ${a.estado||'—'}</div>
+          <div style="font-size:10px;color:#666">${a.obs_g ? a.obs_g.slice(0,60)+'...' : ''}</div>
+          <button onclick="switchTab('home',null);setTimeout(()=>openDetail('${a.id}'),300)" 
+            style="margin-top:6px;width:100%;padding:4px;background:#e8623a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px">
+            Ver detalle →
+          </button>
+        </div>
+      `);
+    mapaAppMarkers.push(marker);
+  });
+
+  const sinCoords = acres.filter(a =>
+    (a.resp||'').toUpperCase().trim() === nombre &&
+    a.estado !== 'EJECUTADO' && a.estado !== 'ANULADA' && !cache[a.id]
+  ).length;
+
+  document.getElementById('mapaSubtitleApp').textContent =
+    `${misAcres.length} frentes en mapa${sinCoords > 0 ? ` · ${sinCoords} sin coordenadas — presioná "Cargar en mapa"` : ''}`;
+
+  if (mapaAppMarkers.length > 0) {
+    const group = L.featureGroup(mapaAppMarkers);
+    mapaAppInstance.fitBounds(group.getBounds().pad(0.15));
+  }
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────────
 function switchTab(tab, el) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => { if (t.getAttribute('onclick') && t.getAttribute('onclick').includes(`'${tab}'`)) t.classList.add('active'); });
@@ -1476,6 +1643,7 @@ function switchTab(tab, el) {
   viewStack.length = 1; viewStack[0] = tab;
   if (tab === 'sync') renderSync();
   if (tab === 'profile') renderProfile();
+  if (tab === 'mapa') initMapaApp();
 }
 
 function openDetail(id) {
