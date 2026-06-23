@@ -282,7 +282,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 
     <!-- ══ HORMIGON ══ -->
     <div id="page-hormigon" class="page">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
         <div>
           <div style="font-family:var(--fh);font-size:16px;font-weight:700">Parte de Hormigón</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px;">Registro de viajes · <span id="hormDate"></span></div>
@@ -290,11 +290,33 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input class="sf" id="hormInputDate" type="date" onchange="renderHormigon()">
           <button class="btn bp" onclick="addViaje()">+ Agregar viaje</button>
+          <button class="btn bg" onclick="imprimirParteHormigon()" title="Imprimir / guardar como imagen">🖨 Imprimir</button>
           <button class="btn bg" onclick="exportHorm()">↓ Exportar</button>
         </div>
       </div>
-      <div id="hormContent"></div>
-      <button class="add-viaje-btn" onclick="addViaje()">+ Agregar nuevo viaje de hormigón</button>
+      <!-- Tabs -->
+      <div style="display:flex;gap:2px;border-bottom:2px solid var(--line);margin-bottom:14px">
+        <button id="htab-parte" onclick="switchHormTab('parte',this)" style="padding:7px 14px;border:none;border-bottom:2px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;font-size:12px;margin-bottom:-2px">📋 Parte del día</button>
+        <button id="htab-db" onclick="switchHormTab('db',this);initHormDB()" style="padding:7px 14px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);font-weight:600;cursor:pointer;font-size:12px;margin-bottom:-2px">📊 Base de datos</button>
+        <button id="htab-cfg" onclick="switchHormTab('cfg',this);renderHormCfg()" style="padding:7px 14px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);font-weight:600;cursor:pointer;font-size:12px;margin-bottom:-2px">⚙️ Config</button>
+      </div>
+      <div id="hormTabParte">
+        <div id="hormContent"></div>
+        <button class="add-viaje-btn" onclick="addViaje()">+ Agregar nuevo viaje de hormigón</button>
+      </div>
+      <div id="hormTabDB" style="display:none">
+        <div id="hormDBContent"></div>
+      </div>
+      <div id="hormTabCfg" style="display:none;max-width:500px">
+        <div class="panel" style="margin-bottom:12px">
+          <div class="ph"><span class="pt">Tipos de hormigón</span></div>
+          <div class="pb2" id="cfgTiposList"></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><span class="pt">Empresas / Hormigoneras</span></div>
+          <div class="pb2" id="cfgEmpresasList"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ CERTIFICACION ══ -->
@@ -513,16 +535,9 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     </div>
 
     <!-- ══ ADMINISTRACIÓN ══ -->
-    <div id="page-config" class="page">
-      <!-- TABS -->
-      <div style="display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:16px;padding-bottom:0">
-        <button id="tab-asig" onclick="switchConfigTab('asig')" style="padding:8px 16px;border:none;border-bottom:2px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;font-size:13px">📋 Asignación</button>
-        <button id="tab-resp" onclick="switchConfigTab('resp')" style="padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);font-weight:600;cursor:pointer;font-size:13px">👥 Responsables</button>
-        <button id="tab-import" onclick="switchConfigTab('import')" style="padding:8px 16px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--text3);font-weight:600;cursor:pointer;font-size:13px">📥 Importar Excel</button>
-      </div>
-
-      <!-- TAB: ASIGNACIÓN -->
-      <div id="tabContent-asig" style="max-width:960px">
+    <!-- ══ PAGE ASIGNACIÓN ══ -->
+    <div id="page-asig" class="page">
+      <div style="max-width:960px">
         <div class="panel">
           <div class="ph">
             <span class="pt">Asignación de frentes a responsables</span>
@@ -552,7 +567,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
               <button class="btn" onclick="desasignarSeleccionados()" style="margin-left:4px">✕ Quitar</button>
               <span style="font-size:11px;color:var(--text3);margin-left:auto" id="asigInfo"></span>
             </div>
-            <div style="max-height:450px;overflow-y:auto;border:1px solid var(--line);border-radius:8px">
+            <div style="max-height:calc(100vh - 320px);overflow-y:auto;border:1px solid var(--line);border-radius:8px">
               <table style="width:100%;border-collapse:collapse;font-size:12px" id="asigTable">
                 <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
                   <tr>
@@ -571,9 +586,59 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- TAB: RESPONSABLES -->
-      <div id="tabContent-resp" style="max-width:640px;display:none">
+    <!-- ══ PAGE IMPORTAR EXCEL ══ -->
+    <div id="page-import" class="page">
+      <div style="max-width:720px">
+
+        <div class="panel" style="margin-bottom:16px">
+          <div class="ph"><span class="pt">📥 Importar desde Planilla Madre (.xlsm / .xlsx)</span></div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
+              Cargá la <strong>Planilla Madre</strong> de PREVIAL VI. El sistema lee la hoja <strong>"PLANILLA MADRE"</strong> y actualiza todos los frentes: estado, %, responsable, fechas de apertura / hormigonado / colocación / fin, observaciones y materialidad.<br>
+              <span style="color:var(--yellow)">⚠ Los frentes que ya tienen datos más recientes en la app no se pisan.</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="importPM" accept=".xlsx,.xlsm,.xls" onchange="importarPlanillaMadre(this)" style="display:none">
+              <button class="btn bp" onclick="document.getElementById('importPM').click()">📂 Seleccionar Planilla Madre</button>
+              <span id="importPMStatus" style="font-size:12px;color:var(--text3)"></span>
+            </div>
+            <div id="importPMResult" style="margin-top:14px"></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:16px">
+          <div class="ph"><span class="pt">📄 Importar desde JSON de base</span></div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
+              Importá un archivo JSON previamente exportado (backup de Drive o Planilla Madre procesada).
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <input type="file" id="importJSON" accept=".json" onchange="importarJSON(this)" style="display:none">
+              <button class="btn bg" onclick="document.getElementById('importJSON').click()">📥 Seleccionar JSON</button>
+            </div>
+            <div id="importJSONResult" style="margin-top:12px;font-size:12px"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ph"><span class="pt">📋 Importar Excel genérico (alta de frentes)</span></div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+              Para agregar frentes nuevos: columnas <strong>ID · DIRECCIÓN · ALTURA · COM · AREA · INTERV · MAT</strong>
+            </div>
+            <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importarExcel(this)" style="display:none">
+            <button class="btn bg" onclick="document.getElementById('importExcel').click()">📥 Seleccionar Excel</button>
+            <div id="importResult" style="margin-top:12px;font-size:12px"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="page-config" class="page">
+      <div id="tabContent-resp" style="max-width:640px">
         <div class="panel" style="margin-bottom:14px">
           <div class="ph"><span class="pt">Agregar nuevo responsable</span></div>
           <div class="pb2">
@@ -594,65 +659,8 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         </div>
         <div class="panel"><div class="ph"><span class="pt">Responsables activos</span><span class="tag" id="respCount">0</span></div><div class="pb2" id="respList"></div></div>
       </div>
-
-      <!-- TAB: IMPORTAR EXCEL -->
-      <div id="tabContent-import" style="max-width:720px;display:none">
-
-        <!-- OPCIÓN 1: PLANILLA MADRE -->
-        <div class="panel" style="margin-bottom:16px">
-          <div class="ph">
-            <span class="pt">📥 Importar desde Planilla Madre (.xlsm / .xlsx)</span>
-          </div>
-          <div class="pb2">
-            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
-              Cargá la <strong>Planilla Madre</strong> de PREVIAL VI. El sistema lee la hoja <strong>"PLANILLA MADRE"</strong> y actualiza todos los frentes:
-              estado, %, responsable, fechas de apertura / hormigonado / colocación / fin, observaciones y materialidad.<br>
-              <span style="color:var(--yellow)">⚠ Los frentes que ya tienen datos más recientes en la app no se pisan.</span>
-            </div>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <input type="file" id="importPM" accept=".xlsx,.xlsm,.xls" onchange="importarPlanillaMadre(this)" style="display:none">
-              <button class="btn bp" onclick="document.getElementById('importPM').click()">📂 Seleccionar Planilla Madre</button>
-              <span id="importPMStatus" style="font-size:12px;color:var(--text3)"></span>
-            </div>
-            <div id="importPMResult" style="margin-top:14px"></div>
-          </div>
-        </div>
-
-        <!-- OPCIÓN 2: JSON generado (para re-importar o sincronizar) -->
-        <div class="panel" style="margin-bottom:16px">
-          <div class="ph">
-            <span class="pt">📄 Importar desde JSON de base</span>
-          </div>
-          <div class="pb2">
-            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
-              Importá un archivo JSON previamente exportado (por ej. el que se genera desde la Planilla Madre o un backup de Drive).
-            </div>
-            <div style="display:flex;gap:10px;align-items:center">
-              <input type="file" id="importJSON" accept=".json" onchange="importarJSON(this)" style="display:none">
-              <button class="btn bg" onclick="document.getElementById('importJSON').click()">📥 Seleccionar JSON</button>
-            </div>
-            <div id="importJSONResult" style="margin-top:12px;font-size:12px"></div>
-          </div>
-        </div>
-
-        <!-- OPCIÓN 3: Excel genérico (columnas básicas) -->
-        <div class="panel">
-          <div class="ph"><span class="pt">📋 Importar Excel genérico (alta de frentes)</span></div>
-          <div class="pb2">
-            <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
-              Para agregar frentes nuevos desde una planilla con columnas: <strong>ID · DIRECCIÓN · ALTURA · COM · AREA · INTERV · MAT</strong>
-            </div>
-            <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importarExcel(this)" style="display:none">
-            <button class="btn bg" onclick="document.getElementById('importExcel').click()">📥 Seleccionar Excel</button>
-            <div id="importResult" style="margin-top:12px;font-size:12px"></div>
-          </div>
-        </div>
-
-      </div>
     </div>
 
-  </div>
-</div>
 
 <!-- MODAL DETALLE -->
 <div class="mo" id="modal">
@@ -708,7 +716,18 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
             </div>
             <div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Resp.</div>
-              <select id="mEditResp" class="form-input" style="font-size:12px;padding:6px 8px" id="mEditResp"></select>
+              <select id="mEditResp" class="form-input" style="font-size:12px;padding:6px 8px"></select>
+            </div>
+          </div>
+          <!-- Fila dir/alt -->
+          <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:end;margin-top:8px">
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Dirección</div>
+              <input id="mEditDir" class="form-input" type="text" placeholder="ej. BELGRANO AV." style="font-size:12px;padding:6px 8px;width:100%;text-transform:uppercase">
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Altura</div>
+              <input id="mEditAlt" class="form-input" type="text" placeholder="ej. 2378" style="font-size:12px;padding:6px 8px;width:100%">
             </div>
           </div>
           <!-- Fila 2: datos descriptivos editables -->
@@ -779,8 +798,8 @@ const ALL=[{"id":"AA0001","dir":"ADOLFO ALSINA","alt":"1995","com":3,"area":15.0
 
 // ─── UTILS ────────────────────────────────────────────────────────
 const fmt=n=>Math.round(n).toLocaleString('es-AR');
-const fmtD=d=>{if(!d||d==='None')return '—';try{return new Date(d).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return d;}};
-const fmtDShort=d=>{if(!d||d==='None')return '—';try{const dt=new Date(d);return (dt.getDate())+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+'').slice(2);}catch(e){return d;}};
+const fmtD=d=>{if(!d||d==='None'||String(d).trim().toUpperCase()==='X')return '—';try{const dt=new Date(d);if(isNaN(dt.getTime())||dt.getFullYear()<1990)return '—';return dt.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});}catch(e){return '—';}};
+const fmtDShort=d=>{if(!d||d==='None'||String(d).trim().toUpperCase()==='X')return '—';try{const dt=new Date(d);if(isNaN(dt.getTime())||dt.getFullYear()<1990)return '—';return dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+'').slice(2);}catch(e){return '—';}};
 function pctColor(p){if(p>=100)return 'var(--green)';if(p>0)return 'var(--yellow)';return 'var(--text3)';}
 function badgeClass(e){if(e==='EJECUTADO')return 'b-ej';if(e==='EN EJECUCION')return 'b-ei';if(e==='A EJECUTAR')return 'b-ae';if(e==='ANULADA')return 'b-an';return 'b-no';}
 function isoToday(){return new Date().toISOString().slice(0,10);}
@@ -789,29 +808,27 @@ function monthLabel(ym){const[y,m]=ym.split('-');const mn=['Ene','Feb','Mar','Ab
 // Buscar carpeta real del frente en Drive y actualizar el link
 async function abrirCarpetaDrive(a, linkEl) {
   try {
-    // Primero encontrar la carpeta 01_VEREDAS
-    const q1 = `name='01_VEREDAS' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-    const r1 = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q1)}&fields=files(id)`,
+    // Buscar carpeta que empiece con el ID del acre en todo Drive (sin restringir a subcarpeta)
+    const q = `name contains '${a.id}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const r = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,webViewLink)&orderBy=name`,
       { headers: { Authorization: 'Bearer ' + driveToken } }
     );
-    const d1 = await r1.json();
-    if (!d1.files?.length) return;
-    const rootId = d1.files[0].id;
-
-    // Buscar subcarpeta que empiece con el ID del acre dentro de 01_VEREDAS
-    const q2 = `name contains '${a.id}' and '${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-    const r2 = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q2)}&fields=files(id,name,webViewLink)`,
-      { headers: { Authorization: 'Bearer ' + driveToken } }
-    );
-    const d2 = await r2.json();
-    const carpeta = d2.files?.find(f => f.name.startsWith(a.id));
+    const d = await r.json();
+    const carpeta = d.files?.find(f => f.name.startsWith(a.id) || f.name.includes(a.id));
     if (carpeta?.webViewLink) {
       linkEl.href = carpeta.webViewLink;
       linkEl.textContent = '📁 Ver fotos en Drive ↗';
+      linkEl.style.color = 'var(--green)';
+    } else {
+      linkEl.textContent = '📁 Sin carpeta en Drive';
+      linkEl.style.color = 'var(--text3)';
+      linkEl.href = `https://drive.google.com/drive/search?q=${encodeURIComponent(a.id)}`;
+      linkEl.target = '_blank';
     }
-  } catch(e) {}
+  } catch(e) {
+    linkEl.textContent = '⚠ Error buscando carpeta';
+  }
 }
 
 // ─── CONFIG TABS ─────────────────────────────────────────────────
@@ -1043,6 +1060,10 @@ function guardarAvanceModal() {
   a.pct = Number(document.getElementById('mEditPct').value);
   a.resp = document.getElementById('mEditResp').value;
   // Campos descriptivos
+  const dirVal = document.getElementById('mEditDir').value.trim().toUpperCase();
+  if (dirVal) a.dir = dirVal;
+  const altVal = document.getElementById('mEditAlt').value.trim();
+  if (altVal) a.alt = altVal;
   const comVal = document.getElementById('mEditCom').value;
   if (comVal !== '') a.com = Number(comVal);
   const areaVal = document.getElementById('mEditArea').value;
@@ -1261,9 +1282,14 @@ function renderHormigon(){
         <div class="viaje-num">${idx+1}</div>
         <div class="viaje-info">
           <div class="viaje-title">
-            Hormigonera: <input style="background:var(--bg4);border:none;color:var(--text);font-size:13px;font-weight:600;font-family:var(--fb);width:120px;padding:2px 6px;border-radius:2px;" value="${v.hormigonera||''}" onchange="updateViaje(${idx},'hormigonera',this.value)" placeholder="Nombre/empresa">
+            Hormigonera: <select style="background:var(--bg4);border:1px solid var(--line2);color:var(--text);font-size:13px;font-weight:600;font-family:var(--fb);padding:2px 6px;border-radius:2px;" onchange="updateViaje(${idx},'hormigonera',this.value)">
+              ${HORM_CFG.empresas.map(e=>`<option value="${e}" ${(v.hormigonera||'')==e?'selected':''}>${e}</option>`).join('')}
+              <option value="${v.hormigonera||''}" ${!HORM_CFG.empresas.includes(v.hormigonera||'')?'selected':''}>${v.hormigonera||'Otra...'}</option>
+            </select>
             &nbsp;·&nbsp; m³: <input style="background:var(--bg4);border:none;color:var(--accent);font-size:13px;font-weight:700;font-family:var(--fh);width:50px;padding:2px 6px;border-radius:2px;" value="${v.m3||''}" type="number" onchange="updateViaje(${idx},'m3',this.value)" placeholder="0">
-            &nbsp;·&nbsp; Tipo H°: <input style="background:var(--bg4);border:none;color:var(--text2);font-size:12px;font-family:var(--fb);width:60px;padding:2px 6px;border-radius:2px;" value="${v.tipo||'H21'}" onchange="updateViaje(${idx},'tipo',this.value)" placeholder="H21">
+            &nbsp;·&nbsp; Tipo H°: <select style="background:var(--bg4);border:1px solid var(--line2);color:var(--text2);font-size:12px;font-family:var(--fb);padding:2px 6px;border-radius:2px;" onchange="updateViaje(${idx},'tipo',this.value)">
+              ${HORM_CFG.tipos.map(t=>`<option value="${t}" ${(v.tipo||'H-21')==t?'selected':''}>${t}</option>`).join('')}
+            </select>
             &nbsp;·&nbsp; Árido: <input style="background:var(--bg4);border:none;color:var(--text2);font-size:12px;font-family:var(--fb);width:70px;padding:2px 6px;border-radius:2px;" value="${v.arido||'P.6/20'}" onchange="updateViaje(${idx},'arido',this.value)" placeholder="P.6/20">
             &nbsp;·&nbsp; Horario: <input style="background:var(--bg4);border:none;color:var(--text2);font-size:12px;font-family:var(--fb);width:70px;padding:2px 6px;border-radius:2px;" value="${v.horario||''}" onchange="updateViaje(${idx},'horario',this.value)" placeholder="15:00">
           </div>
@@ -1576,7 +1602,7 @@ function renderCert(){
 
   // Resumen por etapa — universo completo: pendientes + en ejecución + ejecutados sin medir + medidos en el mes
   // Excluidos: ANULADA
-  const pendientes   = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-') && a.pct===0);
+  const pendientes   = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-'));
   const enEjecucion  = ALL.filter(a=>a.estado==='EN EJECUCION' && a.pct>0 && a.pct<100);
   // sinMed y medMes ya están calculados arriba
   const certEtapaFrentes=[...pendientes,...enEjecucion,...sinMed,...medMes];
@@ -1804,6 +1830,8 @@ function openModal(id){
   document.getElementById('mEditPct').value = String(a.pct ?? 0);
   selResp.value = a.resp || '';
   // Nuevos campos editables
+  document.getElementById('mEditDir').value = a.dir || '';
+  document.getElementById('mEditAlt').value = a.alt || '';
   document.getElementById('mEditCom').value = a.com || '';
   document.getElementById('mEditArea').value = a.area || '';
   document.getElementById('mEditInterv').value = a.interv || '';
@@ -1839,35 +1867,25 @@ function openModal(id){
 function closeModal(){document.getElementById('modal').classList.remove('open');}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
 
-// ─── NAVIGATION ──────────────────────────────────────────────────
 const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],mapa:['Mapa de frentes','Frentes activos con geocodificación'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas de responsables'],asig:['Asignación de frentes','Asignar responsables y publicar a la app'],import:['Importar Excel','Cargar frentes desde planilla']};
 function goTo(p,el){
-  // asig e import se muestran dentro de page-config con el tab correcto
-  const tabMap = {asig:'asig', import:'import'};
-  if (tabMap[p]) {
-    // Navegar a config y abrir el tab correspondiente
-    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
-    document.getElementById('page-config').classList.add('active');
-    if(el)el.classList.add('active');
-    const[t,s]=PAGES[p]||['',''];
-    document.getElementById('topT').textContent=t;document.getElementById('topS').textContent=s;
-    switchConfigTab(tabMap[p]);
-    return;
-  }
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
-  document.getElementById('page-'+p).classList.add('active');
-  if(el)el.classList.add('active');
+  const pageEl = document.getElementById('page-'+p);
+  if (!pageEl) return;
+  pageEl.classList.add('active');
+  if(el) el.classList.add('active');
   const[t,s]=PAGES[p]||['',''];
-  document.getElementById('topT').textContent=t;document.getElementById('topS').textContent=s;
-  if(p==='parte')initParte();
+  document.getElementById('topT').textContent=t;
+  document.getElementById('topS').textContent=s;
+  if(p==='parte') initParte();
   if(p==='hormigon'){document.getElementById('hormInputDate').value=document.getElementById('hormInputDate').value||isoToday();renderHormigon();}
-  if(p==='cert')initCert();
-  if(p==='dash')initDash();
-  if(p==='mapa')initMapa();
-  if(p==='lista'&&!document.getElementById('tbody').children.length)renderTable();
-  if(p==='config'){switchConfigTab('resp');} // config directo = responsables
+  if(p==='cert') initCert();
+  if(p==='dash') initDash();
+  if(p==='mapa') initMapa();
+  if(p==='lista'&&!document.getElementById('tbody').children.length) renderTable();
+  if(p==='config') renderRespList();
+  if(p==='asig') renderAsigTable();
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────
@@ -1986,22 +2004,9 @@ function loginDrive(action) {
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
 
-async function findOrCreateFolder(token) {
-  // Buscar carpeta 01_VEREDAS
-  const q = `name='${DRIVE_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
-    headers: { Authorization: 'Bearer ' + token }
-  });
-  const data = await res.json();
-  if (data.files && data.files.length > 0) return data.files[0].id;
-  // Crear carpeta
-  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: DRIVE_FOLDER, mimeType: 'application/vnd.google-apps.folder' })
-  });
-  const folder = await cr.json();
-  return folder.id;
+async function findOrCreateFolder_old(token) {
+  // Mantener compatibilidad — usa DRIVE_FOLDER como nombre
+  return findOrCreateFolder(token, DRIVE_FOLDER || 'PREVIAL_VI_DATA');
 }
 
 async function findDataFile(token, folderId) {
@@ -2147,6 +2152,8 @@ async function sincronizarTodo() {
 
     // PASO 3: Publicar asignaciones y ediciones del backoffice
     await publicarAsignaciones(true);
+    // PASO 4: Backup automático diario
+    autoBackupDrive();
 
     lastSyncTime = new Date().toLocaleString('es-AR');
     localStorage.setItem('bo_last_sync', lastSyncTime);
@@ -2232,6 +2239,278 @@ async function publicarBaseCompleta() {
   }
 }
 
+
+// ─── CONFIG HORMIGÓN (tipos y empresas) ──────────────────────────
+let HORM_CFG = JSON.parse(localStorage.getItem('horm_cfg') || 'null') || {
+  tipos: ['H-17','H-21','H-30'],
+  empresas: ['LOMAX','AVELLANEDA','4D']
+};
+function saveHormCfg() { localStorage.setItem('horm_cfg', JSON.stringify(HORM_CFG)); }
+
+// ─── IMPRESIÓN PARTE HORMIGÓN (Punto 4) ──────────────────────────
+function imprimirParteHormigon() {
+  const dateKey = getViajesDate();
+  const dayViajes = (viajes[dateKey] || []);
+  if (!dayViajes.length) { showToast('No hay viajes para imprimir'); return; }
+
+  const fechaStr = document.getElementById('hormInputDate')?.value || isoToday();
+  const [y,m,d] = fechaStr.split('-');
+  const fechaFmt = `${d}/${m}/${y}`;
+
+  const totalM3 = dayViajes.reduce((s,v) => s + (Number(v.m3)||0), 0);
+  const totalFrentes = dayViajes.reduce((s,v) => s + (v.frentes||[]).length, 0);
+
+  const rows = dayViajes.map((v,i) => {
+    const frentesHtml = (v.frentes||[]).map(f =>
+      `<tr><td></td><td style="padding:3px 8px;font-size:11px">${f.acre||''}</td><td style="padding:3px 8px;font-size:11px">${f.dir||''} ${f.alt||''}</td><td style="padding:3px 8px;font-size:11px;text-align:center">${f.com?'Com.'+f.com:''}</td><td style="padding:3px 8px;font-size:11px;text-align:center">${f.area||''}${f.area?'m²':''}</td></tr>`
+    ).join('');
+    return `
+      <tr style="background:#f5f5f5">
+        <td style="padding:6px 8px;font-weight:700;font-size:12px;vertical-align:top">${i+1}</td>
+        <td style="padding:6px 8px;font-size:12px">${v.hormigonera||'—'}</td>
+        <td style="padding:6px 8px;font-size:12px">${v.tipo||''}</td>
+        <td style="padding:6px 8px;font-size:12px;text-align:center"><strong>${v.m3||'0'} m³</strong></td>
+        <td style="padding:6px 8px;font-size:12px">${v.arido||''}</td>
+        <td style="padding:6px 8px;font-size:12px">${v.horario||''}</td>
+        <td style="padding:6px 8px;font-size:12px">${v.remito||'—'}</td>
+      </tr>
+      ${frentesHtml}`;
+  }).join('');
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Parte Hormigón ${fechaFmt}</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;padding:16px;color:#000;background:#fff}
+    table{width:100%;border-collapse:collapse}
+    th{background:#1a472a;color:#fff;padding:7px 8px;font-size:11px;text-align:left}
+    td{border-bottom:1px solid #ddd;vertical-align:top}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;border-bottom:3px solid #1a472a;padding-bottom:10px}
+    .kpi{display:inline-block;margin-right:24px;font-size:13px}
+    .kpi strong{font-size:20px;display:block;color:#1a472a}
+    @media print{body{padding:8px}}
+  </style></head><body>
+  <div class="header">
+    <div><div style="font-size:22px;font-weight:900;letter-spacing:.05em">PARTE DE HORMIGÓN</div>
+    <div style="font-size:13px;color:#555;margin-top:2px">${fechaFmt}</div></div>
+    <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:#c0392b">CONSTRUMEX S.A.</div>
+    <div style="font-size:11px;color:#777">PREVIAL VI — GCBA</div></div>
+  </div>
+  <div style="margin-bottom:14px">
+    <span class="kpi"><strong>${totalM3} m³</strong>Total hormigón</span>
+    <span class="kpi"><strong>${dayViajes.length}</strong>Viajes</span>
+    <span class="kpi"><strong>${totalFrentes}</strong>Frentes abastecidos</span>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:30px">N°</th><th>Empresa / Hormigonera</th><th>Tipo H°</th>
+      <th style="width:70px">M³</th><th>Árido</th><th>Horario</th><th>Nº Remito</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div style="margin-top:16px;font-size:10px;color:#999;border-top:1px solid #ddd;padding-top:8px">
+    Generado: ${new Date().toLocaleString('es-AR')} · CONSTRUMEX S.A. · PREVIAL VI
+  </div>
+  <script>window.onload=()=>{window.print()}<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// ─── BASE DE DATOS HORMIGÓN (Punto 5) — panel en page-hormigon ──
+function initHormDB() {
+  // Agrupa TODOS los viajes de TODOS los días
+  const resumen = {}; // {mes: {empresa: {tipo: m3}}}
+  const detalles = []; // [{fecha, empresa, tipo, m3, remito, arido, frentes}]
+
+  for (const [fecha, dayViajes] of Object.entries(viajes)) {
+    for (const v of dayViajes) {
+      const m3 = Number(v.m3||0);
+      if (!m3) continue;
+      const emp = v.hormigonera || '—';
+      const tipo = v.tipo || 'H21';
+      const mes = fecha.slice(0,7); // YYYY-MM
+      if (!resumen[mes]) resumen[mes] = {};
+      if (!resumen[mes][emp]) resumen[mes][emp] = {};
+      resumen[mes][emp][tipo] = (resumen[mes][emp][tipo]||0) + m3;
+      detalles.push({ fecha, empresa:emp, tipo, m3, remito:v.remito||'', arido:v.arido||'', nFrentes:(v.frentes||[]).length });
+    }
+  }
+
+  // Renderizar en el panel de DB
+  const el = document.getElementById('hormDBContent');
+  if (!el) return;
+
+  // Resumen mensual
+  const meses = Object.keys(resumen).sort().reverse();
+  if (!meses.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:12px">Sin datos registrados.</div>'; return; }
+
+  const mesActual = meses[0];
+  const mesData = resumen[mesActual];
+
+  // Totales del mes
+  let totalMes = 0;
+  const porTipo = {};
+  for (const [emp, tipos] of Object.entries(mesData)) {
+    for (const [t, m3] of Object.entries(tipos)) {
+      totalMes += m3;
+      porTipo[t] = (porTipo[t]||0) + m3;
+    }
+  }
+
+  // KPIs del mes
+  const kpisHtml = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px 18px;min-width:120px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Total ${mesActual.replace('-','/')}</div>
+        <div style="font-size:24px;font-weight:900;color:var(--accent);font-family:var(--fh)">${totalMes.toFixed(1)} <span style="font-size:13px">m³</span></div>
+      </div>
+      ${Object.entries(porTipo).map(([t,m3])=>`
+        <div style="background:var(--bg3);border-radius:8px;padding:12px 18px;min-width:100px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${t}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--yellow);font-family:var(--fh)">${m3.toFixed(1)} <span style="font-size:12px">m³</span></div>
+        </div>`).join('')}
+    </div>`;
+
+  // Tabla de detalle
+  const detallesMes = detalles.filter(d => d.fecha.startsWith(mesActual)).sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const tablaHtml = `
+    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead style="background:var(--bg3)">
+        <tr>
+          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">FECHA</th>
+          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">EMPRESA</th>
+          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">TIPO H°</th>
+          <th style="padding:8px;text-align:right;color:var(--text3);font-weight:600">M³</th>
+          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">ÁRIDO</th>
+          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">Nº REMITO</th>
+          <th style="padding:8px;text-align:center;color:var(--text3);font-weight:600">FRENTES</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${detallesMes.map(d=>`<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:7px 8px">${d.fecha.split('-').reverse().join('/')}</td>
+          <td style="padding:7px 8px;font-weight:600">${d.empresa}</td>
+          <td style="padding:7px 8px;color:var(--yellow)">${d.tipo}</td>
+          <td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--accent)">${d.m3}</td>
+          <td style="padding:7px 8px;color:var(--text3)">${d.arido}</td>
+          <td style="padding:7px 8px">${d.remito||'—'}</td>
+          <td style="padding:7px 8px;text-align:center">${d.nFrentes}</td>
+        </tr>`).join('')}
+        <tr style="background:var(--bg3);font-weight:700">
+          <td colspan="3" style="padding:8px">Total ${mesActual.replace('-','/')}</td>
+          <td style="padding:8px;text-align:right;color:var(--accent)">${detallesMes.reduce((s,d)=>s+Number(d.m3),0).toFixed(1)}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tbody>
+    </table></div>`;
+
+  el.innerHTML = kpisHtml + tablaHtml;
+}
+
+// ─── BACKUP AUTOMÁTICO EN DRIVE (Punto 8) ────────────────────────
+let _lastBackupDate = localStorage.getItem('bo_last_backup_date') || '';
+
+async function autoBackupDrive() {
+  if (!driveToken) return;
+  const today = new Date().toISOString().slice(0,10);
+  if (_lastBackupDate === today) return; // ya se hizo el backup de hoy
+
+  try {
+    const folderId = await findOrCreateFolder(driveToken, 'PREVIAL_BACKUPS');
+    if (!folderId) return;
+
+    const content = JSON.stringify(exportAcresData(), null, 0);
+    const filename = `backup_${today}.json`;
+
+    // Verificar si ya existe
+    const q = `name='${filename}' and '${folderId}' in parents and trashed=false`;
+    const check = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    const checkData = await check.json();
+    if (checkData.files?.length) { // ya existe
+      _lastBackupDate = today;
+      localStorage.setItem('bo_last_backup_date', today);
+      return;
+    }
+
+    // Subir nuevo backup
+    const meta = { name: filename, parents: [folderId], mimeType: 'application/json' };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', new Blob([content], { type: 'application/json' }));
+    await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + driveToken },
+      body: form
+    });
+
+    _lastBackupDate = today;
+    localStorage.setItem('bo_last_backup_date', today);
+    console.log(`✓ Backup automático creado: ${filename}`);
+  } catch(e) {
+    console.warn('Auto-backup falló:', e.message);
+  }
+}
+
+// Buscar o crear subcarpeta en Drive
+async function findOrCreateFolder(token, name = null) {
+  const folderName = name || DRIVE_FOLDER || 'PREVIAL_VI_DATA';
+  const q = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  const d = await r.json();
+  if (d.files?.length) return d.files[0].id;
+  // Crear
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const cd = await cr.json();
+  return cd.id;
+}
+
+function switchHormTab(tab, el) {
+  ['parte','db','cfg'].forEach(t => {
+    document.getElementById('hormTab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
+    const btn = document.getElementById('htab-' + t);
+    if (btn) { btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent'; btn.style.color = t === tab ? 'var(--accent)' : 'var(--text3)'; btn.style.fontWeight = t === tab ? '700' : '600'; }
+  });
+}
+function renderHormCfg() {
+  const tiposEl = document.getElementById('cfgTiposList');
+  const empresasEl = document.getElementById('cfgEmpresasList');
+  if (!tiposEl || !empresasEl) return;
+
+  const renderLista = (arr, tipo) => arr.map((v,i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+      <span style="flex:1;font-size:13px">${v}</span>
+      <button onclick="hormCfgEliminar('${tipo}',${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">✕</button>
+    </div>`).join('') +
+    `<div style="display:flex;gap:8px;margin-top:10px">
+      <input class="form-input" id="cfgNew${tipo}" placeholder="Agregar ${tipo==='tipo'?'tipo (ej: H-40)':'empresa'}..." style="flex:1">
+      <button class="btn bp" onclick="hormCfgAgregar('${tipo}')">+ Agregar</button>
+    </div>`;
+
+  tiposEl.innerHTML = renderLista(HORM_CFG.tipos, 'tipo');
+  empresasEl.innerHTML = renderLista(HORM_CFG.empresas, 'empresa');
+}
+function hormCfgAgregar(tipo) {
+  const input = document.getElementById('cfgNew' + tipo);
+  const val = input.value.trim();
+  if (!val) return;
+  if (tipo === 'tipo' && !HORM_CFG.tipos.includes(val)) HORM_CFG.tipos.push(val);
+  if (tipo === 'empresa' && !HORM_CFG.empresas.includes(val)) HORM_CFG.empresas.push(val);
+  saveHormCfg(); renderHormCfg();
+}
+function hormCfgEliminar(tipo, idx) {
+  if (tipo === 'tipo') HORM_CFG.tipos.splice(idx, 1);
+  else HORM_CFG.empresas.splice(idx, 1);
+  saveHormCfg(); renderHormCfg();
+}
 
 // ─── INIT ────────────────────────────────────────────────────────
 fillRespSelect();fillMatSelect();fillComSelect();
