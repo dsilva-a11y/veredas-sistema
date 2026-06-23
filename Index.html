@@ -235,7 +235,9 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 <div class="main">
   <div class="topbar">
     <div><div class="tt" id="topT">Parte diario</div><div class="ts2" id="topS">Frentes activos del día</div></div>
-    <span id="syncBar" style="font-size:11px;color:var(--text3);margin-right:8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button onclick="sincronizarTodo()" title="Baja datos de inspectores y publica cambios del backoffice" style="padding:6px 14px;background:var(--accent);border:none;color:#fff;font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600">🔄 Sincronizar</button>
+    <span id="syncBar" style="font-size:11px;color:var(--text3);margin-right:8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+    <button onclick="publicarBaseCompleta()" title="Publicar toda la base en Drive (usar después de importar Planilla Madre o JSON)" style="padding:6px 11px;background:var(--bg3);border:1px solid var(--line);color:var(--text);font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;margin-right:6px">📤 Publicar base</button>
+    <button onclick="sincronizarTodo()" title="Baja avances de inspectores y publica cambios del backoffice" style="padding:6px 14px;background:var(--accent);border:none;color:#fff;font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600">🔄 Sincronizar</button>
   </div>
   <div class="content">
 
@@ -2206,23 +2208,30 @@ async function syncFromDrive() {
   }
 }
 
-async function publishToDrive() {
+// Publicar toda la base ALL a Drive (ACRES_DATA.json) — usar después de importar
+async function publicarBaseCompleta() {
   if (!driveToken) { loginDrive('publish'); return; }
-  updateSyncBar('Publicando...', 'var(--yellow)');
+  const n = ALL.length;
+  if (!confirm(`¿Publicar los ${n} frentes en Drive?\n\nEsto reemplaza la base en Drive con los datos actuales en pantalla.\nUsá esto después de importar la Planilla Madre o el JSON.`)) return;
+  updateSyncBar('Publicando base completa...', 'var(--yellow)');
   try {
     const folderId = await findOrCreateFolder(driveToken);
     const existingId = await findDataFile(driveToken, folderId);
     const content = JSON.stringify(exportAcresData(), null, 0);
     await uploadDataFile(driveToken, folderId, content, existingId);
+    // También publicar SYNC_UPDATES con el estado actual para que la app lo reciba
+    await publicarAsignaciones(true);
+    _importacionPendiente = false;
     lastSyncTime = new Date().toLocaleString('es-AR');
     localStorage.setItem('bo_last_sync', lastSyncTime);
-    updateSyncBar(`✓ Publicado ${lastSyncTime}`, 'var(--green)');
-    showToast('Base publicada en Drive (' + ALL.length + ' frentes)');
+    updateSyncBar(`✓ Base publicada ${lastSyncTime} · ${n} frentes`, 'var(--green)');
+    showToast(`✓ Base completa publicada en Drive (${n} frentes)`);
   } catch(e) {
     if (e.message && e.message.includes('401')) { driveToken = null; loginDrive('publish'); return; }
-    updateSyncBar('Error publicando: ' + e.message, 'var(--accent)');
+    updateSyncBar('Error: ' + e.message, 'var(--accent)');
   }
 }
+
 
 // ─── INIT ────────────────────────────────────────────────────────
 fillRespSelect();fillMatSelect();fillComSelect();
