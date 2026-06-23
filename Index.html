@@ -2433,94 +2433,161 @@ async function exportarImagenHorm() {
 
 
 function initHormDB() {
-  // Agrupa TODOS los viajes de TODOS los días
-  const resumen = {}; // {mes: {empresa: {tipo: m3}}}
-  const detalles = []; // [{fecha, empresa, tipo, m3, remito, arido, frentes}]
-
-  for (const [fecha, dayViajes] of Object.entries(viajes)) {
-    for (const v of dayViajes) {
-      const m3 = Number(v.m3||0);
-      if (!m3) continue;
-      const emp = v.hormigonera || '—';
-      const tipo = v.tipo || 'H21';
-      const mes = fecha.slice(0,7); // YYYY-MM
-      if (!resumen[mes]) resumen[mes] = {};
-      if (!resumen[mes][emp]) resumen[mes][emp] = {};
-      resumen[mes][emp][tipo] = (resumen[mes][emp][tipo]||0) + m3;
-      detalles.push({ fecha, empresa:emp, tipo, m3, remito:v.remito||'', arido:v.arido||'', nFrentes:(v.frentes||[]).length });
-    }
-  }
-
-  // Renderizar en el panel de DB
   const el = document.getElementById('hormDBContent');
   if (!el) return;
 
-  // Resumen mensual
-  const meses = Object.keys(resumen).sort().reverse();
-  if (!meses.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:12px">Sin datos registrados.</div>'; return; }
+  // Seleccionador de mes
+  const mesesDisp = [...new Set(Object.keys(viajes).map(f=>f.slice(0,7)))].sort().reverse();
+  if (!mesesDisp.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:24px;text-align:center">Sin viajes registrados todavía.<br>Cargá viajes en el tab "Parte del día" y aparecerán acá.</div>';
+    return;
+  }
 
-  const mesActual = meses[0];
-  const mesData = resumen[mesActual];
+  const selMes = el.querySelector('#hormDBMesSel')?.value || mesesDisp[0];
 
-  // Totales del mes
-  let totalMes = 0;
-  const porTipo = {};
-  for (const [emp, tipos] of Object.entries(mesData)) {
-    for (const [t, m3] of Object.entries(tipos)) {
-      totalMes += m3;
-      porTipo[t] = (porTipo[t]||0) + m3;
+  // Filtrar viajes del mes seleccionado
+  const detalles = [];
+  for (const [fecha, dayViajes] of Object.entries(viajes)) {
+    if (!fecha.startsWith(selMes)) continue;
+    for (const v of dayViajes) {
+      const m3 = Number(v.m3||0);
+      if (!m3) continue;
+      // Cruzar frentes con responsable de ALL
+      const respSet = new Set();
+      (v.frentes||[]).forEach(f => {
+        const acre = ALL.find(a => a.id === f.acre);
+        if (acre?.resp) respSet.add(acre.resp);
+      });
+      detalles.push({
+        fecha,
+        empresa: v.hormigonera || '—',
+        tipo: v.tipo || '—',
+        m3,
+        arido: v.arido || '—',
+        remito: v.remito || '',
+        horario: v.horario || '',
+        frentes: v.frentes || [],
+        responsables: [...respSet].join(', ') || '—'
+      });
     }
   }
 
-  // KPIs del mes
-  const kpisHtml = `
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
-      <div style="background:var(--bg3);border-radius:8px;padding:12px 18px;min-width:120px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Total ${mesActual.replace('-','/')}</div>
-        <div style="font-size:24px;font-weight:900;color:var(--accent);font-family:var(--fh)">${totalMes.toFixed(1)} <span style="font-size:13px">m³</span></div>
+  // Totales
+  const totalM3 = detalles.reduce((s,d) => s+d.m3, 0);
+  const porTipo = {};
+  const porResp = {};
+  const porEmp  = {};
+  detalles.forEach(d => {
+    porTipo[d.tipo] = (porTipo[d.tipo]||0) + d.m3;
+    porEmp[d.empresa] = (porEmp[d.empresa]||0) + d.m3;
+    d.responsables.split(', ').forEach(r => {
+      if (r && r !== '—') porResp[r] = (porResp[r]||0) + d.m3;
+    });
+  });
+
+  const [y, m] = selMes.split('-');
+  const mesLabel = new Date(y, m-1).toLocaleString('es-AR', {month:'long', year:'numeric'});
+
+  el.innerHTML = `
+    <!-- Selector de mes -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <label style="font-size:12px;color:var(--text3)">Mes:</label>
+      <select id="hormDBMesSel" class="form-input" style="width:160px;font-size:12px" onchange="initHormDB()">
+        ${mesesDisp.map(mes => {
+          const [yy,mm] = mes.split('-');
+          const lbl = new Date(yy,mm-1).toLocaleString('es-AR',{month:'long',year:'numeric'});
+          return `<option value="${mes}" ${mes===selMes?'selected':''}>${lbl}</option>`;
+        }).join('')}
+      </select>
+    </div>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px 16px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Total m³</div>
+        <div style="font-size:26px;font-weight:900;color:var(--accent);font-family:var(--fh)">${totalM3.toFixed(1)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px 16px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase">Viajes</div>
+        <div style="font-size:26px;font-weight:900;color:var(--text);font-family:var(--fh)">${detalles.length}</div>
       </div>
       ${Object.entries(porTipo).map(([t,m3])=>`
-        <div style="background:var(--bg3);border-radius:8px;padding:12px 18px;min-width:100px">
-          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${t}</div>
-          <div style="font-size:20px;font-weight:700;color:var(--yellow);font-family:var(--fh)">${m3.toFixed(1)} <span style="font-size:12px">m³</span></div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px 16px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase">${t}</div>
+          <div style="font-size:22px;font-weight:700;color:var(--yellow);font-family:var(--fh)">${m3.toFixed(1)} <span style="font-size:11px">m³</span></div>
         </div>`).join('')}
+    </div>
+
+    <!-- Resumen por responsable -->
+    ${Object.keys(porResp).length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Por responsable</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${Object.entries(porResp).sort((a,b)=>b[1]-a[1]).map(([r,m3])=>`
+          <div style="background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:8px 14px;display:flex;align-items:center;gap:8px">
+            <div class="ua" style="background:${respColor(r)};width:28px;height:28px;font-size:11px">${r.slice(0,2)}</div>
+            <div>
+              <div style="font-size:12px;font-weight:600">${r}</div>
+              <div style="font-size:13px;font-weight:700;color:var(--accent)">${m3.toFixed(1)} m³</div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Resumen por empresa -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Por hormigonera</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${Object.entries(porEmp).sort((a,b)=>b[1]-a[1]).map(([e,m3])=>`
+          <div style="background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:8px 14px">
+            <div style="font-size:12px;font-weight:600">${e}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--blue)">${m3.toFixed(1)} m³</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Tabla detalle -->
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Detalle de viajes — ${mesLabel}</div>
+    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead style="background:var(--bg3)">
+          <tr>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;white-space:nowrap">FECHA</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">EMPRESA</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">TIPO H°</th>
+            <th style="padding:8px 10px;text-align:right;color:var(--text3);font-weight:600">M³</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">ÁRIDO</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">HORARIO</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">Nº REMITO</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">RESPONSABLE</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">FRENTES</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${detalles.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>`
+            <tr style="border-bottom:1px solid var(--line)">
+              <td style="padding:7px 10px;white-space:nowrap">${d.fecha.split('-').reverse().join('/')}</td>
+              <td style="padding:7px 10px;font-weight:600">${d.empresa}</td>
+              <td style="padding:7px 10px;color:var(--yellow)">${d.tipo}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--accent)">${d.m3}</td>
+              <td style="padding:7px 10px;color:var(--text3)">${d.arido}</td>
+              <td style="padding:7px 10px;color:var(--text3)">${d.horario}</td>
+              <td style="padding:7px 10px">${d.remito||'—'}</td>
+              <td style="padding:7px 10px">${d.responsables}</td>
+              <td style="padding:7px 10px;text-align:center;color:var(--text3)">${d.frentes.length}</td>
+            </tr>`).join('')}
+          <tr style="background:var(--bg3);font-weight:700;border-top:2px solid var(--line)">
+            <td colspan="3" style="padding:8px 10px">Total ${mesLabel}</td>
+            <td style="padding:8px 10px;text-align:right;color:var(--accent)">${totalM3.toFixed(1)}</td>
+            <td colspan="5"></td>
+          </tr>
+        </tbody>
+      </table>
     </div>`;
 
-  // Tabla de detalle
-  const detallesMes = detalles.filter(d => d.fecha.startsWith(mesActual)).sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  const tablaHtml = `
-    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead style="background:var(--bg3)">
-        <tr>
-          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">FECHA</th>
-          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">EMPRESA</th>
-          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">TIPO H°</th>
-          <th style="padding:8px;text-align:right;color:var(--text3);font-weight:600">M³</th>
-          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">ÁRIDO</th>
-          <th style="padding:8px;text-align:left;color:var(--text3);font-weight:600">Nº REMITO</th>
-          <th style="padding:8px;text-align:center;color:var(--text3);font-weight:600">FRENTES</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${detallesMes.map(d=>`<tr style="border-bottom:1px solid var(--line)">
-          <td style="padding:7px 8px">${d.fecha.split('-').reverse().join('/')}</td>
-          <td style="padding:7px 8px;font-weight:600">${d.empresa}</td>
-          <td style="padding:7px 8px;color:var(--yellow)">${d.tipo}</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--accent)">${d.m3}</td>
-          <td style="padding:7px 8px;color:var(--text3)">${d.arido}</td>
-          <td style="padding:7px 8px">${d.remito||'—'}</td>
-          <td style="padding:7px 8px;text-align:center">${d.nFrentes}</td>
-        </tr>`).join('')}
-        <tr style="background:var(--bg3);font-weight:700">
-          <td colspan="3" style="padding:8px">Total ${mesActual.replace('-','/')}</td>
-          <td style="padding:8px;text-align:right;color:var(--accent)">${detallesMes.reduce((s,d)=>s+Number(d.m3),0).toFixed(1)}</td>
-          <td colspan="3"></td>
-        </tr>
-      </tbody>
-    </table></div>`;
-
-  el.innerHTML = kpisHtml + tablaHtml;
+  // Restaurar valor del select después de re-render
+  const sel = document.getElementById('hormDBMesSel');
+  if (sel) sel.value = selMes;
 }
 
 // ─── BACKUP AUTOMÁTICO EN DRIVE (Punto 8) ────────────────────────
