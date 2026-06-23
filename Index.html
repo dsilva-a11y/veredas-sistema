@@ -594,20 +594,58 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
       </div>
 
       <!-- TAB: IMPORTAR EXCEL -->
-      <div id="tabContent-import" style="max-width:640px;display:none">
-        <div class="panel">
-          <div class="ph"><span class="pt">Importar frentes desde Excel</span></div>
+      <div id="tabContent-import" style="max-width:720px;display:none">
+
+        <!-- OPCIÓN 1: PLANILLA MADRE -->
+        <div class="panel" style="margin-bottom:16px">
+          <div class="ph">
+            <span class="pt">📥 Importar desde Planilla Madre (.xlsm / .xlsx)</span>
+          </div>
           <div class="pb2">
-            <div style="font-size:12px;color:var(--text3);margin-bottom:16px;line-height:1.6">
-              El archivo Excel debe tener las siguientes columnas:<br>
-              <strong>ID · DIRECCIÓN · ALTURA · COM · AREA · INTERV · MAT</strong><br>
-              (en ese orden o con esos encabezados exactos)
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
+              Cargá la <strong>Planilla Madre</strong> de PREVIAL VI. El sistema lee la hoja <strong>"PLANILLA MADRE"</strong> y actualiza todos los frentes:
+              estado, %, responsable, fechas de apertura / hormigonado / colocación / fin, observaciones y materialidad.<br>
+              <span style="color:var(--yellow)">⚠ Los frentes que ya tienen datos más recientes en la app no se pisan.</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="importPM" accept=".xlsx,.xlsm,.xls" onchange="importarPlanillaMadre(this)" style="display:none">
+              <button class="btn bp" onclick="document.getElementById('importPM').click()">📂 Seleccionar Planilla Madre</button>
+              <span id="importPMStatus" style="font-size:12px;color:var(--text3)"></span>
+            </div>
+            <div id="importPMResult" style="margin-top:14px"></div>
+          </div>
+        </div>
+
+        <!-- OPCIÓN 2: JSON generado (para re-importar o sincronizar) -->
+        <div class="panel" style="margin-bottom:16px">
+          <div class="ph">
+            <span class="pt">📄 Importar desde JSON de base</span>
+          </div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
+              Importá un archivo JSON previamente exportado (por ej. el que se genera desde la Planilla Madre o un backup de Drive).
+            </div>
+            <div style="display:flex;gap:10px;align-items:center">
+              <input type="file" id="importJSON" accept=".json" onchange="importarJSON(this)" style="display:none">
+              <button class="btn bg" onclick="document.getElementById('importJSON').click()">📥 Seleccionar JSON</button>
+            </div>
+            <div id="importJSONResult" style="margin-top:12px;font-size:12px"></div>
+          </div>
+        </div>
+
+        <!-- OPCIÓN 3: Excel genérico (columnas básicas) -->
+        <div class="panel">
+          <div class="ph"><span class="pt">📋 Importar Excel genérico (alta de frentes)</span></div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+              Para agregar frentes nuevos desde una planilla con columnas: <strong>ID · DIRECCIÓN · ALTURA · COM · AREA · INTERV · MAT</strong>
             </div>
             <input type="file" id="importExcel" accept=".xlsx,.xls" onchange="importarExcel(this)" style="display:none">
-            <button class="btn bp" onclick="document.getElementById('importExcel').click()">📥 Seleccionar archivo Excel</button>
+            <button class="btn bg" onclick="document.getElementById('importExcel').click()">📥 Seleccionar Excel</button>
             <div id="importResult" style="margin-top:12px;font-size:12px"></div>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -2172,9 +2210,244 @@ async function publishToDrive() {
 // ─── INIT ────────────────────────────────────────────────────────
 fillRespSelect();fillMatSelect();fillComSelect();
 initParte();
+// ─── IMPORTAR PLANILLA MADRE ──────────────────────────────────────
+async function importarPlanillaMadre(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('importPMStatus');
+  const result = document.getElementById('importPMResult');
+  status.textContent = '⏳ Leyendo archivo...';
+  result.innerHTML = '';
+  input.value = '';
+
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+
+    // Buscar hoja PLANILLA MADRE
+    const sheetName = wb.SheetNames.find(n => n.toUpperCase().includes('PLANILLA MADRE'));
+    if (!sheetName) {
+      result.innerHTML = `<span style="color:var(--accent)">❌ No se encontró la hoja "PLANILLA MADRE" en el archivo.</span>`;
+      status.textContent = '';
+      return;
+    }
+
+    status.textContent = '⏳ Procesando frentes...';
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: false });
+
+    if (!rows.length) {
+      result.innerHTML = `<span style="color:var(--accent)">❌ La hoja está vacía.</span>`;
+      status.textContent = '';
+      return;
+    }
+
+    // Mapeo flexible de columnas
+    const colMap = {
+      id:     ['ACRE','acre','ID','id'],
+      dir:    ['DIRECCION','Direccion','DIRECCIÓN','Dirección','DIR'],
+      alt:    ['ALTURA','altura','ALT','alt'],
+      com:    ['COMUNA','Comuna','COM','com'],
+      area:   ['Área estimada a reparar','AREA','Area','área estimada a reparar'],
+      interv: ['INTERVENCION','Intervención','INTERV','interv'],
+      mat:    ['Materialidad','MATERIALIDAD','MAT','mat'],
+      resp:   ['RESPONSABLE','Responsable','RESP','resp'],
+      obs:    ['OBSERVACIONES A CORREGIR','Obs','OBS','observaciones a corregir'],
+      obs_g:  ['OBS. GENERAL','Obs. General','OBS_G','obs. general'],
+      f_med:  ['FECHA DE MEDICION','Fecha de medicion','FECHA MEDICION'],
+      f_prog: ['FECHA PROGR.','Fecha Progr.','FECHA PROGRAMADA'],
+      f_aper: ['FECHA APERTURA','Fecha Apertura'],
+      f_horm: ['FECHA HORMIGONADO','Fecha Hormigonado'],
+      f_col:  ['FECHA COLOCACION','Fecha Colocacion'],
+      f_fin:  ['FECHA DE FIN.','Fecha de Fin.','FECHA FIN'],
+      pct_raw:['%Completado','% Completado','PCT'],
+    };
+
+    function getCol(row, keys) {
+      for (const k of keys) {
+        if (row[k] !== undefined && row[k] !== null && row[k] !== '') return row[k];
+      }
+      return null;
+    }
+
+    function fmtDate(v) {
+      if (!v) return null;
+      const s = String(v).trim().toUpperCase();
+      if (s === 'X' || s === '') return null;
+      // Si viene como fecha de Excel o string
+      if (v instanceof Date) return v.toISOString().slice(0, 10);
+      // formato DD/MM/YYYY o YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
+        const [d, m, y] = s.split('/');
+        return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      }
+      // Excel serial date
+      const n = Number(v);
+      if (!isNaN(n) && n > 40000) {
+        const d = new Date((n - 25569) * 86400 * 1000);
+        if (d.getFullYear() > 1990) return d.toISOString().slice(0, 10);
+      }
+      return null;
+    }
+
+    function derivarEstadoPct(f_med, f_fin, f_col, f_horm, f_aper, f_prog, pct_raw) {
+      const pctStr = String(pct_raw || '').trim().toUpperCase();
+      if (pctStr === 'X') return { estado: 'ANULADA', pct: 0 };
+      if (f_med || f_fin) return { estado: 'EJECUTADO', pct: 100 };
+      if (f_col)  return { estado: 'EN EJECUCION', pct: 75 };
+      if (f_horm) return { estado: 'EN EJECUCION', pct: 50 };
+      if (f_aper) return { estado: 'EN EJECUCION', pct: 25 };
+      const progStr = String(f_prog || '').trim().toUpperCase();
+      if (f_prog && progStr !== 'X' && progStr !== '') return { estado: 'A EJECUTAR', pct: 1 };
+      return { estado: '-', pct: 0 };
+    }
+
+    const idx = {};
+    ALL.forEach((a, i) => { idx[a.id] = i; });
+
+    let actualizados = 0, nuevos = 0, omitidos = 0;
+    const ahora = new Date().toISOString();
+    const preview = [];
+
+    for (const row of rows) {
+      const id = String(getCol(row, colMap.id) || '').trim().toUpperCase();
+      if (!id || !id.startsWith('AA')) { omitidos++; continue; }
+
+      const f_med  = fmtDate(getCol(row, colMap.f_med));
+      const f_prog = fmtDate(getCol(row, colMap.f_prog)) || (String(getCol(row, colMap.f_prog)||'').trim().toUpperCase() === 'X' ? 'X' : null);
+      const f_aper = fmtDate(getCol(row, colMap.f_aper));
+      const f_horm = fmtDate(getCol(row, colMap.f_horm));
+      const f_col  = fmtDate(getCol(row, colMap.f_col));
+      const f_fin  = fmtDate(getCol(row, colMap.f_fin));
+      const pct_raw = getCol(row, colMap.pct_raw);
+
+      const { estado, pct } = derivarEstadoPct(f_med, f_fin, f_col, f_horm, f_aper, f_prog, pct_raw);
+
+      const resp   = String(getCol(row, colMap.resp)  || '').trim();
+      const obs    = String(getCol(row, colMap.obs)   || '').trim();
+      const obs_g  = String(getCol(row, colMap.obs_g) || '').trim();
+      const dir    = String(getCol(row, colMap.dir)   || '').trim();
+      const alt    = String(getCol(row, colMap.alt)   || '').trim();
+      const mat    = String(getCol(row, colMap.mat)   || '').trim();
+      const interv = String(getCol(row, colMap.interv)|| '').trim();
+      let   com    = getCol(row, colMap.com);
+      try { com = com ? Number(com) : null; } catch(e){ com = null; }
+      let   area   = getCol(row, colMap.area);
+      try { area = area ? parseFloat(area) : 0; } catch(e){ area = 0; }
+
+      if (idx[id] !== undefined) {
+        const a = ALL[idx[id]];
+        // Regla: si el frente en memoria fue editado recientemente por el backoffice, no pisar
+        // Para la importación masiva, la Planilla Madre manda (es la fuente de verdad)
+        const prev_estado = a.estado;
+        a.estado = estado;
+        a.pct    = pct;
+        a.resp   = resp || a.resp; // no borrar responsable si está vacío en Excel
+        a.obs    = obs  || a.obs;
+        a.obs_g  = obs_g || a.obs_g;
+        a.dir    = dir  || a.dir;
+        a.alt    = alt  || a.alt;
+        a.mat    = mat  || a.mat;
+        a.interv = interv || a.interv;
+        if (com)  a.com  = com;
+        if (area) a.area = area;
+        if (f_med)  a.f_med  = f_med;
+        if (f_prog && f_prog !== 'X') a.f_prog = f_prog;
+        if (f_aper) a.f_aper = f_aper;
+        if (f_horm) a.f_horm = f_horm;
+        if (f_col)  a.f_col  = f_col;
+        if (f_fin)  a.f_fin  = f_fin;
+        a._updated = ahora;
+        a._editado = true;
+        if (prev_estado !== estado) preview.push({ id, de: prev_estado, a: estado });
+        actualizados++;
+      } else {
+        // Frente nuevo
+        ALL.push({ id, dir, alt, com, area, interv, mat, resp, obs, obs_g,
+          estado, pct, f_med, f_prog: f_prog === 'X' ? null : f_prog,
+          f_aper, f_horm, f_col, f_fin, _updated: ahora, _editado: true });
+        idx[id] = ALL.length - 1;
+        nuevos++;
+      }
+    }
+
+    // Refrescar UI
+    renderTable(); applyFilters(); initDash(); initCert();
+
+    const previewHtml = preview.slice(0, 20).map(p =>
+      `<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--line)">
+        <span style="color:var(--accent);font-weight:600">${p.id}</span>
+        <span style="color:var(--text3)"> ${p.de} → </span>
+        <span style="color:var(--green)">${p.a}</span>
+       </div>`
+    ).join('');
+
+    result.innerHTML = `
+      <div style="background:var(--bg3);border:1px solid var(--green);border-radius:4px;padding:12px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:6px">✅ Importación completa</div>
+        <div style="font-size:12px;color:var(--text)">
+          ✔ <strong>${actualizados}</strong> frentes actualizados &nbsp;·&nbsp;
+          ✔ <strong>${nuevos}</strong> frentes nuevos &nbsp;·&nbsp;
+          ${omitidos} filas ignoradas
+        </div>
+      </div>
+      ${preview.length ? `
+        <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">
+          Cambios de estado detectados (${preview.length}${preview.length > 20 ? ', mostrando primeros 20' : ''}):
+        </div>
+        ${previewHtml}
+      ` : ''}
+      <div style="margin-top:12px;font-size:12px;color:var(--yellow)">
+        ⚠ Los cambios están en memoria. Presioná <strong>🔄 Sincronizar</strong> para publicar en Drive y que la app los reciba.
+      </div>`;
+    status.textContent = `✓ ${actualizados + nuevos} frentes procesados`;
+
+  } catch(e) {
+    result.innerHTML = `<span style="color:var(--accent)">❌ Error: ${e.message}</span>`;
+    status.textContent = '';
+    console.error(e);
+  }
+}
+
 renderTable();
 if (lastSyncTime) updateSyncBar('Último sync: ' + lastSyncTime, 'var(--text3)');
 checkOAuthCallback();
+async function importarJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const result = document.getElementById('importJSONResult');
+  result.innerHTML = '⏳ Procesando...';
+  input.value = '';
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const arr = Array.isArray(data) ? data : [];
+    if (!arr.length) { result.innerHTML = '<span style="color:var(--accent)">❌ JSON vacío o formato incorrecto.</span>'; return; }
+    const idx = {};
+    ALL.forEach((a, i) => { idx[a.id] = i; });
+    let act = 0, new_ = 0;
+    const ahora = new Date().toISOString();
+    for (const r of arr) {
+      if (!r.id) continue;
+      if (idx[r.id] !== undefined) {
+        const a = ALL[idx[r.id]];
+        Object.assign(a, r, { _updated: ahora, _editado: true });
+        act++;
+      } else {
+        ALL.push({ ...r, _updated: ahora, _editado: true });
+        idx[r.id] = ALL.length - 1;
+        new_++;
+      }
+    }
+    renderTable(); applyFilters(); initDash(); initCert();
+    result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos. Sincronizá para publicar.</span>`;
+  } catch(e) {
+    result.innerHTML = `<span style="color:var(--accent)">❌ Error: ${e.message}</span>`;
+  }
+}
+
+
 </script>
 
 <!-- MODAL BUSCADOR DE FRENTES PARA HORMIGÓN -->
