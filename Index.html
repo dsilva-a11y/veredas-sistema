@@ -669,6 +669,39 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
               <select id="mEditResp" class="form-input" style="font-size:12px;padding:6px 8px" id="mEditResp"></select>
             </div>
           </div>
+          <!-- Fila 2: datos descriptivos editables -->
+          <div style="display:grid;grid-template-columns:60px 70px 1fr 1fr;gap:8px;align-items:end;margin-top:8px">
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Comuna</div>
+              <input id="mEditCom" class="form-input" type="number" min="1" max="15" style="font-size:12px;padding:6px 8px;width:100%">
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">M²</div>
+              <input id="mEditArea" class="form-input" type="number" min="0" step="0.5" style="font-size:12px;padding:6px 8px;width:100%">
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Intervención</div>
+              <select id="mEditInterv" class="form-input" style="font-size:12px;padding:6px 8px">
+                <option value="">—</option>
+                <option value="PARCIAL">PARCIAL</option>
+                <option value="COMPLETO">COMPLETO</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">F. Fin</div>
+              <input id="mEditFfin" class="form-input" type="date" style="font-size:12px;padding:6px 8px;width:100%">
+            </div>
+          </div>
+          <!-- Fila 3: materialidad -->
+          <div style="margin-top:8px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Materialidad</div>
+            <input id="mEditMat" class="form-input" type="text" placeholder="ej. 64 PANES GRIS" style="font-size:12px;padding:6px 8px;width:100%">
+          </div>
+          <!-- Fila 4: obs general -->
+          <div style="margin-top:8px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Obs. General (supervisor)</div>
+            <textarea id="mEditObsG" class="form-input" rows="2" placeholder="Observación visible para el inspector…" style="font-size:12px;padding:6px 8px;width:100%;resize:vertical"></textarea>
+          </div>
           <button onclick="guardarAvanceModal()" style="margin-top:8px;width:100%;padding:7px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer">💾 Guardar cambios</button>
         </div>
       </div>
@@ -965,6 +998,19 @@ function guardarAvanceModal() {
   a.estado = document.getElementById('mEditEstado').value;
   a.pct = Number(document.getElementById('mEditPct').value);
   a.resp = document.getElementById('mEditResp').value;
+  // Campos descriptivos
+  const comVal = document.getElementById('mEditCom').value;
+  if (comVal !== '') a.com = Number(comVal);
+  const areaVal = document.getElementById('mEditArea').value;
+  if (areaVal !== '') a.area = Number(areaVal);
+  const intervVal = document.getElementById('mEditInterv').value;
+  if (intervVal !== '') a.interv = intervVal;
+  const matVal = document.getElementById('mEditMat').value.trim();
+  if (matVal !== '') a.mat = matVal;
+  const ffinVal = document.getElementById('mEditFfin').value;
+  if (ffinVal !== '') a.f_fin = ffinVal;
+  const obsGVal = document.getElementById('mEditObsG').value.trim();
+  a.obs_g = obsGVal; // siempre actualiza (puede borrarse)
   a._editado = true; // marcar que el backoffice editó este frente
   a._updated = new Date().toISOString(); // timestamp para resolución de conflictos
   // Actualizar vista del modal
@@ -1082,14 +1128,14 @@ function renderParte(){
     const frentes=grupos[resp];
     frentes.forEach((a,i)=>{
       const retr=esRetrasado(a);
-      const bg=retr?'background:#fff59d':'';
-      const color_pct=retr?'color:#b8860b':'';
+      const bg=retr?'background:#fff59d;color:#000':'background:#fff;color:#000';
+      const color_pct=retr?'color:#b8860b;font-weight:700':'color:#222;font-weight:700';
       filas+=`<tr style="${bg}">
-        <td style="padding:4px 8px;border:1px solid #ccc;font-weight:600;color:#333;vertical-align:top">${i===0?resp:''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc">${a.dir||''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${a.alt||''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center">${fmtDShort(a.f_prog)||''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;font-weight:700;${color_pct}">${a.pct||0}%</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;font-weight:600;color:#333;vertical-align:top;background:inherit">${i===0?resp:''}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;color:#000">${a.dir||''}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;color:#000">${a.alt||''}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;color:#000">${fmtDShort(a.f_prog)||''}</td>
+        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;${color_pct}">${a.pct||0}%</td>
       </tr>`;
     });
   });
@@ -1714,6 +1760,13 @@ function openModal(id){
   document.getElementById('mEditEstado').value = a.estado || '-';
   document.getElementById('mEditPct').value = String(a.pct ?? 0);
   selResp.value = a.resp || '';
+  // Nuevos campos editables
+  document.getElementById('mEditCom').value = a.com || '';
+  document.getElementById('mEditArea').value = a.area || '';
+  document.getElementById('mEditInterv').value = a.interv || '';
+  document.getElementById('mEditMat').value = a.mat || '';
+  document.getElementById('mEditFfin').value = a.f_fin || '';
+  document.getElementById('mEditObsG').value = a.obs_g || '';
   const rv=document.getElementById('mRespAv');rv.textContent=(a.resp||'—').slice(0,2);rv.style.background=respColor(a.resp);
   document.getElementById('mResp').textContent=a.resp||'Sin asignar';
   document.getElementById('mPct').textContent=a.pct+'%';
