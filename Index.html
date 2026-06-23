@@ -2105,11 +2105,25 @@ function updateSyncBar(msg, color) {
 }
 
 // Sincronización completa: baja datos de inspectores + publica cambios del backoffice
+let _importacionPendiente = false; // flag cuando se importó la Planilla Madre o JSON
+
 async function sincronizarTodo() {
   if (!driveToken) { loginDrive('sync'); return; }
   updateSyncBar('Sincronizando...', 'var(--yellow)');
   try {
-    // 1. Bajar datos de la app (SYNC_UPDATES.json)
+    // PASO 1: Si hay importación masiva pendiente, publicar la base completa primero
+    // Esto garantiza que la importación no sea pisada por los datos de Drive
+    if (_importacionPendiente) {
+      updateSyncBar('Publicando base importada en Drive...', 'var(--yellow)');
+      const folderId = await findOrCreateFolder(driveToken);
+      const existingId = await findDataFile(driveToken, folderId);
+      const content = JSON.stringify(exportAcresData(), null, 0);
+      await uploadDataFile(driveToken, folderId, content, existingId);
+      _importacionPendiente = false;
+      updateSyncBar('Base publicada. Bajando avances de inspectores...', 'var(--yellow)');
+    }
+
+    // PASO 2: Bajar avances de la app (SYNC_UPDATES.json) y fusionar con timestamps
     const q = `name='SYNC_UPDATES.json' and trashed=false`;
     const searchRes = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`,
@@ -2128,12 +2142,15 @@ async function sincronizarTodo() {
         count = mergeAcresData(Array.isArray(updates) ? updates : []);
       }
     }
-    // 2. Publicar los cambios del backoffice (asignaciones + ediciones)
-    await publicarAsignaciones(true); // true = silencioso, sin toast propio
+
+    // PASO 3: Publicar asignaciones y ediciones del backoffice
+    await publicarAsignaciones(true);
+
     lastSyncTime = new Date().toLocaleString('es-AR');
     localStorage.setItem('bo_last_sync', lastSyncTime);
-    updateSyncBar(`✓ Sync ${lastSyncTime} · ${count} actualizados`, 'var(--green)');
-    showToast(`Sync completo — ${count} frentes de la app + publicación enviada`);
+    updateSyncBar(`✓ Sync ${lastSyncTime} · ${count} avances de app`, 'var(--green)');
+    showToast(`Sync completo — ${count} avances de la app sincronizados`);
+
     // Refrescar vista activa
     const activePage = document.querySelector('.page.active');
     if (activePage) {
@@ -2374,6 +2391,8 @@ async function importarPlanillaMadre(input) {
 
     // Refrescar UI
     renderTable(); applyFilters(); initDash(); initCert();
+    _importacionPendiente = true; // la próxima sincronización publica la base antes de bajar
+    updateSyncBar(`⚠ Importación lista (${actualizados + nuevos} frentes) — Sincronizá para publicar en Drive`, 'var(--yellow)');
 
     const previewHtml = preview.slice(0, 20).map(p =>
       `<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--line)">
@@ -2441,7 +2460,8 @@ async function importarJSON(input) {
       }
     }
     renderTable(); applyFilters(); initDash(); initCert();
-    result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos. Sincronizá para publicar.</span>`;
+    _importacionPendiente = true;
+    result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos. Presioná <strong>🔄 Sincronizar</strong> para publicar en Drive.</span>`;
   } catch(e) {
     result.innerHTML = `<span style="color:var(--accent)">❌ Error: ${e.message}</span>`;
   }
