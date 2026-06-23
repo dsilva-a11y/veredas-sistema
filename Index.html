@@ -290,7 +290,8 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input class="sf" id="hormInputDate" type="date" onchange="renderHormigon()">
           <button class="btn bp" onclick="addViaje()">+ Agregar viaje</button>
-          <button class="btn bg" onclick="imprimirParteHormigon()" title="Imprimir / guardar como imagen">🖨 Imprimir</button>
+          <button class="btn bg" onclick="imprimirParteHormigon()" title="Abrir ventana para imprimir / guardar PDF">🖨 PDF</button>
+          <button class="btn bg" onclick="exportarImagenHorm()" title="Descargar imagen para compartir por WhatsApp">📸 Imagen</button>
           <button class="btn bg" onclick="exportHorm()">↓ Exportar</button>
         </div>
       </div>
@@ -441,6 +442,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
             <option value="">Todos los resp.</option>
           </select>
           <button class="btn bp" onclick="geocodificarTodos()" id="btnGeo" style="font-size:11px">📍 Geocodificar</button>
+          <button class="btn" onclick="limpiarGeoCache()" title="Borrar coordenadas guardadas y re-geocodificar desde cero (útil si hay puntos fuera de CABA)" style="font-size:11px">🗑 Reset caché</button>
         </div>
       </div>
       <!-- Leyenda -->
@@ -1262,6 +1264,11 @@ function renderParte(){
 
 // ─── HORMIGON ─────────────────────────────────────────────────────
 let viajes=JSON.parse(localStorage.getItem('veredas_viajes')||'{}');
+let HORM_CFG = JSON.parse(localStorage.getItem('horm_cfg') || 'null') || {
+  tipos: ['H-17','H-21','H-30'],
+  empresas: ['LOMAX','AVELLANEDA','4D']
+};
+function saveHormCfg() { localStorage.setItem('horm_cfg', JSON.stringify(HORM_CFG)); }
 
 function getViajesDate(){return document.getElementById('hormInputDate').value||isoToday();}
 
@@ -1370,6 +1377,14 @@ function getGeoCache() {
 function saveGeoCache(cache) {
   try { localStorage.setItem(geocacheKey, JSON.stringify(cache)); } catch(e) {}
 }
+function limpiarGeoCache() {
+  if (!confirm('¿Borrar todas las coordenadas guardadas?\n\nEsto elimina el caché de geocodificación (incluyendo puntos incorrectos fuera de CABA). Después tenés que volver a geocodificar con 📍 Geocodificar.')) return;
+  localStorage.removeItem(geocacheKey);
+  // Limpiar coords en memoria
+  ALL.forEach(a => { delete a._lat; delete a._lng; });
+  showToast('✓ Caché borrado — presioná 📍 Geocodificar para re-geocodificar dentro de CABA');
+  if (document.getElementById('page-mapa')?.classList.contains('active')) initMapa();
+}
 
 function markerColor(a) {
   const pct = Number(a.pct || 0);
@@ -1394,11 +1409,23 @@ function markerIcon(a) {
 }
 
 async function geocodificarDireccion(dir, alt) {
-  const query = `${dir} ${alt}, Buenos Aires, Argentina`;
+  // Viewbox de CABA: sur=-34.705, norte=-34.527, oeste=-58.532, este=-58.334
+  const CABA_VIEWBOX = '-58.532,-34.705,-58.334,-34.527';
+  // Query estructurada: dirección + altura + ciudad explícita
+  const query = `${dir} ${alt}, Ciudad Autónoma de Buenos Aires, Argentina`;
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=ar`);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=3&countrycodes=ar&viewbox=${CABA_VIEWBOX}&bounded=1`;
+    const r = await fetch(url, { headers: { 'Accept-Language': 'es' } });
     const d = await r.json();
-    if (d && d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+    if (d && d.length > 0) {
+      // Verificar que el resultado esté dentro de CABA (doble control)
+      const res = d.find(item => {
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
+        return lat >= -34.705 && lat <= -34.527 && lng >= -58.532 && lng <= -58.334;
+      });
+      if (res) return { lat: parseFloat(res.lat), lng: parseFloat(res.lon) };
+    }
   } catch(e) {}
   return null;
 }
@@ -1602,10 +1629,11 @@ function renderCert(){
 
   // Resumen por etapa — universo completo: pendientes + en ejecución + ejecutados sin medir + medidos en el mes
   // Excluidos: ANULADA
-  const pendientes   = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-'));
+  const pendientes   = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-') && Number(a.pct)===0);
+  const programados  = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-') && Number(a.pct)===1);
   const enEjecucion  = ALL.filter(a=>a.estado==='EN EJECUCION' && a.pct>0 && a.pct<100);
   // sinMed y medMes ya están calculados arriba
-  const certEtapaFrentes=[...pendientes,...enEjecucion,...sinMed,...medMes];
+  const certEtapaFrentes=[...pendientes,...programados,...enEjecucion,...sinMed,...medMes];
   const m2CertTotal=certEtapaFrentes.reduce((s,a)=>s+(a.area||0),0);
 
   const etapasCert=[
@@ -1615,7 +1643,7 @@ function renderCert(){
     },
     {
       label:'Prog. p/ apertura (1%)', icon:'⬜', color:'var(--text2)',
-      grupo: enEjecucion.filter(a=>a.pct===1)
+      grupo: programados
     },
     {
       label:'Apertura (25%)', icon:'🔵', color:'var(--blue)',
@@ -2240,14 +2268,7 @@ async function publicarBaseCompleta() {
 }
 
 
-// ─── CONFIG HORMIGÓN (tipos y empresas) ──────────────────────────
-let HORM_CFG = JSON.parse(localStorage.getItem('horm_cfg') || 'null') || {
-  tipos: ['H-17','H-21','H-30'],
-  empresas: ['LOMAX','AVELLANEDA','4D']
-};
-function saveHormCfg() { localStorage.setItem('horm_cfg', JSON.stringify(HORM_CFG)); }
-
-// ─── IMPRESIÓN PARTE HORMIGÓN (Punto 4) ──────────────────────────
+// ─── IMPRESIÓN PARTE HORMIGÓN ──────────────────────────────────────
 function imprimirParteHormigon() {
   const dateKey = getViajesDate();
   const dayViajes = (viajes[dateKey] || []);
@@ -2316,7 +2337,101 @@ function imprimirParteHormigon() {
   win.document.close();
 }
 
-// ─── BASE DE DATOS HORMIGÓN (Punto 5) — panel en page-hormigon ──
+// ─── EXPORTAR IMAGEN HORMIGÓN (WhatsApp) ─────────────────────────
+async function exportarImagenHorm() {
+  const dateKey = getViajesDate();
+  const dayViajes = (viajes[dateKey] || []);
+  if (!dayViajes.length) { showToast('No hay viajes para exportar'); return; }
+
+  showToast('Generando imagen...');
+
+  const fechaStr = document.getElementById('hormInputDate')?.value || isoToday();
+  const [y,m,d] = fechaStr.split('-');
+  const fechaFmt = `${d}/${m}/${y}`;
+  const totalM3 = dayViajes.reduce((s,v) => s + (Number(v.m3)||0), 0);
+
+  const rows = dayViajes.map((v,i) => {
+    const frentes = (v.frentes||[]).map(f =>
+      `<tr><td></td><td style="padding:3px 10px;font-size:12px;color:#555">${f.acre||''}</td><td style="padding:3px 10px;font-size:12px">${f.dir||''} ${f.alt||''}</td><td style="padding:3px 10px;font-size:12px;color:#555">${f.com?'Com.'+f.com:''}</td><td style="padding:3px 10px;font-size:12px">${f.area||''}${f.area?'m²':''}</td></tr>`
+    ).join('');
+    return `<tr style="background:#f9f9f9">
+      <td style="padding:8px 10px;font-weight:700;font-size:13px">${i+1}</td>
+      <td style="padding:8px 10px;font-size:13px;font-weight:600">${v.hormigonera||'—'}</td>
+      <td style="padding:8px 10px;font-size:13px">${v.tipo||''}</td>
+      <td style="padding:8px 10px;font-size:14px;font-weight:700;color:#c0392b">${v.m3||'0'} m³</td>
+      <td style="padding:8px 10px;font-size:13px">${v.arido||''}</td>
+      <td style="padding:8px 10px;font-size:13px">${v.horario||''}</td>
+      <td style="padding:8px 10px;font-size:13px">${v.remito||'—'}</td>
+    </tr>${frentes}`;
+  }).join('');
+
+  // Crear div temporal para capturar
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;left:-9999px;top:0;background:#fff;padding:20px;width:800px;font-family:Arial,sans-serif';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:3px solid #1a472a;padding-bottom:10px">
+      <div>
+        <div style="font-size:24px;font-weight:900;color:#111">PARTE DE HORMIGÓN</div>
+        <div style="font-size:14px;color:#555;margin-top:3px">${fechaFmt}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:#c0392b">CONSTRUMEX S.A.</div>
+        <div style="font-size:12px;color:#888">PREVIAL VI — GCBA</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:24px;margin-bottom:16px">
+      <div style="background:#f0f0f0;padding:10px 18px;border-radius:6px">
+        <div style="font-size:11px;color:#888">TOTAL HORMIGÓN</div>
+        <div style="font-size:26px;font-weight:900;color:#1a472a">${totalM3} m³</div>
+      </div>
+      <div style="background:#f0f0f0;padding:10px 18px;border-radius:6px">
+        <div style="font-size:11px;color:#888">VIAJES</div>
+        <div style="font-size:26px;font-weight:900;color:#555">${dayViajes.length}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#1a472a;color:#fff">
+          <th style="padding:8px 10px;text-align:left">N°</th>
+          <th style="padding:8px 10px;text-align:left">Empresa</th>
+          <th style="padding:8px 10px;text-align:left">Tipo H°</th>
+          <th style="padding:8px 10px;text-align:left">M³</th>
+          <th style="padding:8px 10px;text-align:left">Árido</th>
+          <th style="padding:8px 10px;text-align:left">Horario</th>
+          <th style="padding:8px 10px;text-align:left">Nº Remito</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="margin-top:12px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:8px">
+      Generado: ${new Date().toLocaleString('es-AR')} · CONSTRUMEX S.A. · PREVIAL VI
+    </div>`;
+  document.body.appendChild(div);
+
+  try {
+    // Cargar html2canvas si no está
+    if (!window.html2canvas) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const canvas = await html2canvas(div, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+    const link = document.createElement('a');
+    link.download = `parte_hormigon_${fechaStr}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.92);
+    link.click();
+    showToast('✓ Imagen descargada — compartí por WhatsApp');
+  } catch(e) {
+    showToast('Error generando imagen: ' + e.message);
+  } finally {
+    document.body.removeChild(div);
+  }
+}
+
+
 function initHormDB() {
   // Agrupa TODOS los viajes de TODOS los días
   const resumen = {}; // {mes: {empresa: {tipo: m3}}}
