@@ -222,7 +222,9 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <div class="ni" onclick="qf('EJECUTADO',this)">✅ &nbsp;Ejecutados &nbsp;<span class="nb g" id="nb-ej">0</span></div>
     <div class="ni" onclick="qf('ANULADA',this)">⛔ &nbsp;Anulados &nbsp;<span class="nb" id="nb-an">0</span></div>
     <div class="nl">Administración</div>
-    <div class="ni" onclick="goTo('config',this)">⚙️ &nbsp;Responsables</div>
+    <div class="ni" onclick="goTo('asig',this)">📋 &nbsp;Asignación &nbsp;<span class="nb" id="nb-sin-asig">0</span></div>
+    <div class="ni" onclick="goTo('config',this)">👥 &nbsp;Responsables</div>
+    <div class="ni" onclick="goTo('import',this)">📥 &nbsp;Importar Excel</div>
   </div>
   <div class="su">
     <div class="ua">DA</div>
@@ -233,7 +235,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 <div class="main">
   <div class="topbar">
     <div><div class="tt" id="topT">Parte diario</div><div class="ts2" id="topS">Frentes activos del día</div></div>
-    <span id="syncBar" style="font-size:11px;color:var(--text3);margin-right:8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button onclick="syncFromDrive()" title="Leer actualizaciones de la app móvil" style="padding:6px 11px;background:var(--bg3);border:1px solid var(--line);color:var(--text);font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;margin-right:6px">☁️ Actualizar</button><button onclick="publishToDrive()" title="Publicar base completa en Drive" style="padding:6px 11px;background:var(--bg3);border:1px solid var(--line);color:var(--text);font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap">📤 Publicar base</button>
+    <span id="syncBar" style="font-size:11px;color:var(--text3);margin-right:8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><button onclick="sincronizarTodo()" title="Baja datos de inspectores y publica cambios del backoffice" style="padding:6px 14px;background:var(--accent);border:none;color:#fff;font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600">🔄 Sincronizar</button>
   </div>
   <div class="content">
 
@@ -857,9 +859,9 @@ function desasignarSeleccionados() {
   renderAsigTable();
 }
 
-async function publicarAsignaciones() {
+async function publicarAsignaciones(silencioso = false) {
   if (!driveToken) { loginDrive('publish'); return; }
-  updateSyncBar('Publicando asignaciones...', 'var(--yellow)');
+  if (!silencioso) updateSyncBar('Publicando asignaciones...', 'var(--yellow)');
   try {
     // El backoffice SOLO publica resp (asignación) — nunca pisa pct/estado del inspector
     // Leer SYNC_UPDATES actual y solo actualizar el campo resp
@@ -929,8 +931,10 @@ async function publicarAsignaciones() {
         method: 'POST', headers: { Authorization: 'Bearer ' + driveToken }, body: form
       });
     }
-    updateSyncBar(`✓ Asignaciones publicadas ${new Date().toLocaleTimeString('es-AR')}`, 'var(--green)');
-    showToast('Asignaciones publicadas — los inspectores verán sus frentes al conectar Drive');
+    if (!silencioso) {
+      updateSyncBar(`✓ Asignaciones publicadas ${new Date().toLocaleTimeString('es-AR')}`, 'var(--green)');
+      showToast('Asignaciones publicadas — los inspectores verán sus frentes al conectar Drive');
+    }
   } catch(e) {
     updateSyncBar('Error: ' + e.message, 'var(--accent)');
   }
@@ -1071,6 +1075,10 @@ document.getElementById('nb-ei').textContent=S.frei;
 document.getElementById('nb-ae').textContent=S.frae;
 document.getElementById('nb-ej').textContent=S.frej;
 document.getElementById('nb-an').textContent=S.fran;
+// Badge de sin asignar (excluye ejecutados y anulados)
+const sinAsig = ALL.filter(a => !a.resp && a.estado !== 'EJECUTADO' && a.estado !== 'ANULADA').length;
+const nbSinAsig = document.getElementById('nb-sin-asig');
+if (nbSinAsig) nbSinAsig.textContent = sinAsig;
 
 // ─── CERT PANELS COLAPSABLES ─────────────────────────────────────
 function toggleCertPanel(id) {
@@ -1797,8 +1805,21 @@ function closeModal(){document.getElementById('modal').classList.remove('open');
 document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
 
 // ─── NAVIGATION ──────────────────────────────────────────────────
-const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],mapa:['Mapa de frentes','Frentes activos con geocodificación'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas']};
+const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],mapa:['Mapa de frentes','Frentes activos con geocodificación'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas de responsables'],asig:['Asignación de frentes','Asignar responsables y publicar a la app'],import:['Importar Excel','Cargar frentes desde planilla']};
 function goTo(p,el){
+  // asig e import se muestran dentro de page-config con el tab correcto
+  const tabMap = {asig:'asig', import:'import'};
+  if (tabMap[p]) {
+    // Navegar a config y abrir el tab correspondiente
+    document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+    document.getElementById('page-config').classList.add('active');
+    if(el)el.classList.add('active');
+    const[t,s]=PAGES[p]||['',''];
+    document.getElementById('topT').textContent=t;document.getElementById('topS').textContent=s;
+    switchConfigTab(tabMap[p]);
+    return;
+  }
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
@@ -1811,7 +1832,7 @@ function goTo(p,el){
   if(p==='dash')initDash();
   if(p==='mapa')initMapa();
   if(p==='lista'&&!document.getElementById('tbody').children.length)renderTable();
-  if(p==='config'){switchConfigTab('asig');}
+  if(p==='config'){switchConfigTab('resp');} // config directo = responsables
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────
@@ -2048,6 +2069,50 @@ function updateSyncBar(msg, color) {
   if (!bar) return;
   bar.textContent = msg;
   bar.style.color = color || 'var(--text2)';
+}
+
+// Sincronización completa: baja datos de inspectores + publica cambios del backoffice
+async function sincronizarTodo() {
+  if (!driveToken) { loginDrive('sync'); return; }
+  updateSyncBar('Sincronizando...', 'var(--yellow)');
+  try {
+    // 1. Bajar datos de la app (SYNC_UPDATES.json)
+    const q = `name='SYNC_UPDATES.json' and trashed=false`;
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`,
+      { headers: { Authorization: 'Bearer ' + driveToken } }
+    );
+    if (searchRes.status === 401) { driveToken = null; loginDrive('sync'); return; }
+    const searchData = await searchRes.json();
+    let count = 0;
+    if (searchData.files && searchData.files.length > 0) {
+      const fileId = searchData.files[0].id;
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+      if (r.ok) {
+        const updates = await r.json();
+        count = mergeAcresData(Array.isArray(updates) ? updates : []);
+      }
+    }
+    // 2. Publicar los cambios del backoffice (asignaciones + ediciones)
+    await publicarAsignaciones(true); // true = silencioso, sin toast propio
+    lastSyncTime = new Date().toLocaleString('es-AR');
+    localStorage.setItem('bo_last_sync', lastSyncTime);
+    updateSyncBar(`✓ Sync ${lastSyncTime} · ${count} actualizados`, 'var(--green)');
+    showToast(`Sync completo — ${count} frentes de la app + publicación enviada`);
+    // Refrescar vista activa
+    const activePage = document.querySelector('.page.active');
+    if (activePage) {
+      const pid = activePage.id.replace('page-','');
+      if (pid === 'parte') initParte();
+      else if (pid === 'cert') initCert();
+      else if (pid === 'dash') initDash();
+      else if (pid === 'lista') renderTable();
+    }
+  } catch(e) {
+    updateSyncBar('Error: ' + e.message, 'var(--accent)');
+  }
 }
 
 async function syncFromDrive() {
