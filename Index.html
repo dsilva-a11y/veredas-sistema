@@ -850,12 +850,14 @@ async function publicarAsignaciones() {
       } catch(e) {}
     }
 
-    // Publicar TODOS los campos de los frentes asignados
-    // El SYNC_UPDATES tiene datos completos (descriptivos + operativos)
-    // Solo incluir frentes que tienen responsable asignado
+    // Publicar todos los frentes asignados
+    // Regla: si el backoffice editó el pct/estado (marcado con _editado), ese valor gana
+    // Si no fue editado, respetar el pct del inspector (existing en Drive)
     const asignados = ALL.filter(a => a.resp && a.resp.trim());
     const updates = asignados.map(a => {
       const existing = existingData[a.id] || {};
+      // Si el backoffice editó este frente en esta sesión, su valor gana
+      const backofficeEdito = a._editado === true;
       return {
         id: a.id,
         dir: a.dir || '',
@@ -864,8 +866,8 @@ async function publicarAsignaciones() {
         area: a.area || 0,
         interv: a.interv || '',
         mat: a.mat || '',
-        estado: existing.estado || a.estado || '-',
-        pct: existing.pct !== undefined ? Number(existing.pct) : Number(a.pct || 0),
+        estado: backofficeEdito ? a.estado : (existing.estado || a.estado || '-'),
+        pct: backofficeEdito ? Number(a.pct || 0) : (existing.pct !== undefined ? Number(existing.pct) : Number(a.pct || 0)),
         resp: a.resp || '',
         obs: existing.obs || a.obs || '',
         obs_g: a.obs_g || existing.obs_g || '',
@@ -961,6 +963,7 @@ function guardarAvanceModal() {
   a.estado = document.getElementById('mEditEstado').value;
   a.pct = Number(document.getElementById('mEditPct').value);
   a.resp = document.getElementById('mEditResp').value;
+  a._editado = true; // marcar que el backoffice editó este frente
   // Actualizar vista del modal
   document.getElementById('mPct').textContent = a.pct + '%';
   document.getElementById('mPbar').style.width = a.pct + '%';
