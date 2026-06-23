@@ -396,7 +396,8 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
             <div class="info-row"><span class="info-row-label">Área a reparar</span><span class="info-row-val" id="d-sup">—</span></div>
             <div class="info-row"><span class="info-row-label">Intervención</span><span class="info-row-val" id="d-interv">—</span></div>
             <div class="info-row"><span class="info-row-label">Responsable</span><span class="info-row-val" id="d-resp">—</span></div>
-            <div class="info-row"><span class="info-row-label">Observación</span><span class="info-row-val" id="d-note" style="font-size:12.5px;font-weight:400;color:var(--ink3)">—</span></div>
+            <div class="info-row"><span class="info-row-label">Obs. Inspector</span><span class="info-row-val" id="d-note" style="font-size:12.5px;font-weight:400;color:var(--ink3)">—</span></div>
+            <div class="info-row" id="d-obs-g-row" style="display:none"><span class="info-row-label" style="color:#e8623a;font-weight:600">📋 Supervisor</span><span class="info-row-val" id="d-obs-g" style="font-size:12.5px;font-weight:500;color:#e8623a">—</span></div>
           </div>
         </div>
         <div class="section-title">Historial de relevamientos</div>
@@ -1672,6 +1673,15 @@ function openDetail(id) {
   document.getElementById('d-interv').textContent = v.interv || '—';
   document.getElementById('d-resp').textContent = v.resp || v.responsable || 'Sin asignar';
   document.getElementById('d-note').textContent = v.obs || v.nota || '—';
+  // Obs. del supervisor (backoffice)
+  const obsGEl = document.getElementById('d-obs-g');
+  const obsGRow = document.getElementById('d-obs-g-row');
+  if (v.obs_g && v.obs_g.trim()) {
+    obsGEl.textContent = v.obs_g;
+    obsGRow.style.display = '';
+  } else {
+    obsGRow.style.display = 'none';
+  }
   const dirDisplay = (v.dir || v.direccion || '') + (v.alt || v.altura ? ' ' + (v.alt || v.altura) : '');
   document.getElementById('d-dir').textContent = dirDisplay || v.id;
   document.getElementById('r-subtitle').textContent = v.id + ' · ' + (dirDisplay || v.id);
