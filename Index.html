@@ -2340,97 +2340,162 @@ function imprimirParteHormigon() {
 // ─── EXPORTAR IMAGEN HORMIGÓN (WhatsApp) ─────────────────────────
 async function exportarImagenHorm() {
   const dateKey = getViajesDate();
-  const dayViajes = (viajes[dateKey] || []);
-  if (!dayViajes.length) { showToast('No hay viajes para exportar'); return; }
-
-  showToast('Generando imagen...');
+  const dayViajes = (viajes[dateKey] || []).filter(v => Number(v.m3||0) > 0);
+  if (!dayViajes.length) { showToast('No hay viajes con m³ cargados'); return; }
 
   const fechaStr = document.getElementById('hormInputDate')?.value || isoToday();
   const [y,m,d] = fechaStr.split('-');
   const fechaFmt = `${d}/${m}/${y}`;
-  const totalM3 = dayViajes.reduce((s,v) => s + (Number(v.m3)||0), 0);
 
-  const rows = dayViajes.map((v,i) => {
-    const frentes = (v.frentes||[]).map(f =>
-      `<tr><td></td><td style="padding:3px 10px;font-size:12px;color:#555">${f.acre||''}</td><td style="padding:3px 10px;font-size:12px">${f.dir||''} ${f.alt||''}</td><td style="padding:3px 10px;font-size:12px;color:#555">${f.com?'Com.'+f.com:''}</td><td style="padding:3px 10px;font-size:12px">${f.area||''}${f.area?'m²':''}</td></tr>`
-    ).join('');
-    return `<tr style="background:#f9f9f9">
-      <td style="padding:8px 10px;font-weight:700;font-size:13px">${i+1}</td>
-      <td style="padding:8px 10px;font-size:13px;font-weight:600">${v.hormigonera||'—'}</td>
-      <td style="padding:8px 10px;font-size:13px">${v.tipo||''}</td>
-      <td style="padding:8px 10px;font-size:14px;font-weight:700;color:#c0392b">${v.m3||'0'} m³</td>
-      <td style="padding:8px 10px;font-size:13px">${v.arido||''}</td>
-      <td style="padding:8px 10px;font-size:13px">${v.horario||''}</td>
-      <td style="padding:8px 10px;font-size:13px">${v.remito||'—'}</td>
-    </tr>${frentes}`;
-  }).join('');
-
-  // Crear div temporal para capturar
-  const div = document.createElement('div');
-  div.style.cssText = 'position:fixed;left:-9999px;top:0;background:#fff;padding:20px;width:800px;font-family:Arial,sans-serif';
-  div.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;border-bottom:3px solid #1a472a;padding-bottom:10px">
-      <div>
-        <div style="font-size:24px;font-weight:900;color:#111">PARTE DE HORMIGÓN</div>
-        <div style="font-size:14px;color:#555;margin-top:3px">${fechaFmt}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:18px;font-weight:700;color:#c0392b">CONSTRUMEX S.A.</div>
-        <div style="font-size:12px;color:#888">PREVIAL VI — GCBA</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:24px;margin-bottom:16px">
-      <div style="background:#f0f0f0;padding:10px 18px;border-radius:6px">
-        <div style="font-size:11px;color:#888">TOTAL HORMIGÓN</div>
-        <div style="font-size:26px;font-weight:900;color:#1a472a">${totalM3} m³</div>
-      </div>
-      <div style="background:#f0f0f0;padding:10px 18px;border-radius:6px">
-        <div style="font-size:11px;color:#888">VIAJES</div>
-        <div style="font-size:26px;font-weight:900;color:#555">${dayViajes.length}</div>
-      </div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead>
-        <tr style="background:#1a472a;color:#fff">
-          <th style="padding:8px 10px;text-align:left">N°</th>
-          <th style="padding:8px 10px;text-align:left">Empresa</th>
-          <th style="padding:8px 10px;text-align:left">Tipo H°</th>
-          <th style="padding:8px 10px;text-align:left">M³</th>
-          <th style="padding:8px 10px;text-align:left">Árido</th>
-          <th style="padding:8px 10px;text-align:left">Horario</th>
-          <th style="padding:8px 10px;text-align:left">Nº Remito</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="margin-top:12px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:8px">
-      Generado: ${new Date().toLocaleString('es-AR')} · CONSTRUMEX S.A. · PREVIAL VI
-    </div>`;
-  document.body.appendChild(div);
-
-  try {
-    // Cargar html2canvas si no está
-    if (!window.html2canvas) {
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
-    }
-    const canvas = await html2canvas(div, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-    const link = document.createElement('a');
-    link.download = `parte_hormigon_${fechaStr}.jpg`;
-    link.href = canvas.toDataURL('image/jpeg', 0.92);
-    link.click();
-    showToast('✓ Imagen descargada — compartí por WhatsApp');
-  } catch(e) {
-    showToast('Error generando imagen: ' + e.message);
-  } finally {
-    document.body.removeChild(div);
+  // Si hay más de 1 viaje, mostrar selector
+  if (dayViajes.length > 1) {
+    // Crear modal de selección
+    let picker = document.getElementById('hormImgPicker');
+    if (picker) picker.remove();
+    picker = document.createElement('div');
+    picker.id = 'hormImgPicker';
+    picker.style.cssText = 'position:fixed;inset:0;background:rgba(14,15,17,.85);z-index:300;display:flex;align-items:center;justify-content:center';
+    picker.innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;width:420px;max-width:95vw;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">
+          <div style="font-weight:700;font-size:14px">📸 ¿Qué viaje exportar?</div>
+          <button onclick="document.getElementById('hormImgPicker').remove()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+        </div>
+        <div style="padding:12px 18px;display:flex;flex-direction:column;gap:8px">
+          ${dayViajes.map((v,i) => `
+            <button onclick="generarImagenViaje(${i});document.getElementById('hormImgPicker').remove()"
+              style="background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:10px 14px;text-align:left;cursor:pointer;color:var(--text)">
+              <span style="font-weight:700;color:var(--accent);margin-right:8px">Viaje ${i+1}</span>
+              <span style="font-size:12px">${v.hormigonera||'—'} · ${v.tipo||'—'} · ${v.m3} m³ · ${v.horario||'—'}</span>
+              ${v.remito ? `<span style="font-size:11px;color:var(--text3);margin-left:6px">Rem. ${v.remito}</span>` : ''}
+            </button>`).join('')}
+          <button onclick="generarImagenTodosViajes();document.getElementById('hormImgPicker').remove()"
+            style="background:var(--accent);border:none;border-radius:6px;padding:10px 14px;text-align:left;cursor:pointer;color:#fff;font-weight:600;margin-top:4px">
+            📸 Exportar todos (${dayViajes.length} imágenes)
+          </button>
+        </div>
+      </div>`;
+    picker.addEventListener('click', e => { if (e.target === picker) picker.remove(); });
+    document.body.appendChild(picker);
+  } else {
+    // Solo 1 viaje, exportar directo
+    await generarImagenViaje(0);
   }
 }
 
+async function _cargarHtml2Canvas() {
+  if (window.html2canvas) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+async function generarImagenViaje(idx) {
+  const dateKey = getViajesDate();
+  const dayViajes = viajes[dateKey] || [];
+  const v = dayViajes[idx];
+  if (!v) return;
+
+  const fechaStr = document.getElementById('hormInputDate')?.value || isoToday();
+  const [y,m,d] = fechaStr.split('-');
+  const fechaFmt = `${d}/${m}/${y}`;
+
+  showToast('Generando imagen...');
+  try {
+    await _cargarHtml2Canvas();
+
+    const frentesRows = (v.frentes||[]).map(f => `
+      <tr>
+        <td style="padding:4px 10px;font-size:11px;color:#e8623a;font-weight:700">${f.acre||''}</td>
+        <td style="padding:4px 10px;font-size:12px">${f.dir||''} ${f.alt||''}</td>
+        <td style="padding:4px 10px;font-size:11px;color:#777">${f.com ? 'Com.'+f.com : ''}</td>
+        <td style="padding:4px 10px;font-size:11px;color:#777">${f.area ? f.area+'m²' : ''}</td>
+      </tr>`).join('');
+
+    const div = document.createElement('div');
+    div.style.cssText = 'position:fixed;left:-9999px;top:0;background:#fff;padding:18px 20px;width:560px;font-family:Arial,sans-serif;color:#111';
+    div.innerHTML = `
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a472a;padding-bottom:10px;margin-bottom:14px">
+        <div>
+          <div style="font-size:20px;font-weight:900;color:#111">PARTE DE HORMIGÓN</div>
+          <div style="font-size:12px;color:#555;margin-top:2px">${fechaFmt} &nbsp;·&nbsp; Viaje N° ${idx+1}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:700;color:#c0392b">CONSTRUMEX S.A.</div>
+          <div style="font-size:10px;color:#888">PREVIAL VI — GCBA</div>
+        </div>
+      </div>
+      <!-- Datos del viaje -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:#f5f5f5;border-radius:6px;padding:10px 14px">
+          <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:3px">Hormigonera</div>
+          <div style="font-size:16px;font-weight:700">${v.hormigonera||'—'}</div>
+        </div>
+        <div style="background:#f5f5f5;border-radius:6px;padding:10px 14px">
+          <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:3px">Tipo H°</div>
+          <div style="font-size:16px;font-weight:700;color:#c0392b">${v.tipo||'—'}</div>
+        </div>
+        <div style="background:#1a472a;border-radius:6px;padding:10px 14px">
+          <div style="font-size:10px;color:#a8d5b5;text-transform:uppercase;margin-bottom:3px">M³</div>
+          <div style="font-size:26px;font-weight:900;color:#fff">${v.m3||'0'}</div>
+        </div>
+        <div style="background:#f5f5f5;border-radius:6px;padding:10px 14px">
+          <div style="font-size:10px;color:#888;text-transform:uppercase;margin-bottom:3px">Árido</div>
+          <div style="font-size:14px;font-weight:600">${v.arido||'—'}</div>
+          <div style="font-size:10px;color:#888;margin-top:4px">Horario: ${v.horario||'—'}</div>
+        </div>
+      </div>
+      <!-- Remito -->
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+        <div style="font-size:11px;color:#856404;font-weight:600;text-transform:uppercase">Nº Remito</div>
+        <div style="font-size:18px;font-weight:900;color:#856404">${v.remito||'—'}</div>
+      </div>
+      <!-- Frentes -->
+      ${(v.frentes||[]).length ? `
+      <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;margin-bottom:6px">Frentes abastecidos (${v.frentes.length})</div>
+      <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-radius:6px;overflow:hidden">
+        <thead>
+          <tr style="background:#1a472a;color:#fff">
+            <th style="padding:6px 10px;text-align:left;font-size:11px">ACRE</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px">DIRECCIÓN</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px">COM.</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px">M²</th>
+          </tr>
+        </thead>
+        <tbody>${frentesRows}</tbody>
+      </table>` : ''}
+      <!-- Footer -->
+      <div style="margin-top:12px;font-size:9px;color:#aaa;border-top:1px solid #eee;padding-top:6px">
+        Generado: ${new Date().toLocaleString('es-AR')} · CONSTRUMEX S.A. · PREVIAL VI
+      </div>`;
+
+    document.body.appendChild(div);
+    const canvas = await html2canvas(div, { scale:2, backgroundColor:'#ffffff', useCORS:true });
+    const link = document.createElement('a');
+    link.download = `hormigon_viaje${idx+1}_${fechaStr}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.92);
+    link.click();
+    document.body.removeChild(div);
+    showToast(`✓ Imagen Viaje ${idx+1} descargada`);
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function generarImagenTodosViajes() {
+  const dateKey = getViajesDate();
+  const dayViajes = (viajes[dateKey]||[]).filter(v=>Number(v.m3||0)>0);
+  showToast(`Generando ${dayViajes.length} imágenes...`);
+  for (let i = 0; i < dayViajes.length; i++) {
+    await generarImagenViaje(i);
+    if (i < dayViajes.length-1) await new Promise(r=>setTimeout(r,600));
+  }
+  showToast(`✓ ${dayViajes.length} imágenes descargadas`);
+}
 
 function initHormDB() {
   const el = document.getElementById('hormDBContent');
