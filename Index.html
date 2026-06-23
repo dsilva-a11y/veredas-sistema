@@ -2589,10 +2589,16 @@ async function findOrCreateFolder(token, name = null) {
 }
 
 function switchHormTab(tab, el) {
+  const tabIds = { parte: 'hormTabParte', db: 'hormTabDB', cfg: 'hormTabCfg' };
   ['parte','db','cfg'].forEach(t => {
-    document.getElementById('hormTab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
+    const el2 = document.getElementById(tabIds[t]);
+    if (el2) el2.style.display = t === tab ? '' : 'none';
     const btn = document.getElementById('htab-' + t);
-    if (btn) { btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent'; btn.style.color = t === tab ? 'var(--accent)' : 'var(--text3)'; btn.style.fontWeight = t === tab ? '700' : '600'; }
+    if (btn) {
+      btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === tab ? 'var(--accent)' : 'var(--text3)';
+      btn.style.fontWeight = t === tab ? '700' : '600';
+    }
   });
 }
 function renderHormCfg() {
