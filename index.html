@@ -919,7 +919,8 @@ async function findAcresDataFile(token, folderId) {
 
 async function updateAcresDataJson(p, token) {
   // Estrategia liviana: escribir solo los cambios en SYNC_UPDATES.json
-  // El backoffice lee este archivo y fusiona sobre ALL
+  // ID fijo del archivo compartido — funciona para cualquier cuenta autorizada
+  const FIXED_SYNC_ID = '1YuC6L-G340iHYdkfDAli5gKxZZroOekT';
   const SYNC_FILE = 'SYNC_UPDATES.json';
 
   const pctMap = {
@@ -960,26 +961,34 @@ async function updateAcresDataJson(p, token) {
     _updated: new Date().toISOString(),
   };
 
-  // Buscar SYNC_UPDATES.json en la raíz de Drive (sin importar carpeta)
-  const q = `name='${SYNC_FILE}' and trashed=false`;
-  const searchRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`,
-    { headers: { Authorization: 'Bearer ' + token } }
-  );
-  const searchData = await searchRes.json();
-
+  // Usar ID fijo del archivo compartido (funciona para cualquier cuenta con permisos)
+  let syncFileId = FIXED_SYNC_ID;
   let updates = [];
-  let syncFileId = searchData.files?.[0]?.id || null;
 
-  if (syncFileId) {
-    // Descargar el archivo liviano existente (solo cambios previos)
-    try {
-      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${syncFileId}?alt=media`, {
+  // Intentar leer el archivo existente con el ID fijo
+  try {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${syncFileId}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (r.ok) updates = await r.json();
+    else if (r.status === 404) {
+      // El ID fijo no existe en este entorno — buscar por nombre como fallback
+      const q = `name='${SYNC_FILE}' and trashed=false`;
+      const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
         headers: { Authorization: 'Bearer ' + token }
       });
-      if (r.ok) updates = await r.json();
-    } catch(e) { updates = []; }
-  }
+      const sd = await sr.json();
+      syncFileId = sd.files?.[0]?.id || null;
+      if (syncFileId) {
+        const r2 = await fetch(`https://www.googleapis.com/drive/v3/files/${syncFileId}?alt=media`, {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        if (r2.ok) updates = await r2.json();
+      }
+    }
+  } catch(e) { updates = []; }
+
+  if (!Array.isArray(updates)) updates = [];
 
   // Actualizar o agregar este ACRE en la lista de cambios
   const idx = updates.findIndex(a => a.id === p.acreId);
@@ -1137,17 +1146,27 @@ window.addEventListener('load', () => {
 async function leerAsignacionesDrive() {
   const token = getDriveToken();
   if (!token) return;
+  const FIXED_SYNC_ID = '1YuC6L-G340iHYdkfDAli5gKxZZroOekT';
   try {
-    const q = `name='SYNC_UPDATES.json' and trashed=false`;
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`, {
+    // Intentar con ID fijo primero
+    let fileId = FIXED_SYNC_ID;
+    let r2 = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
       headers: { Authorization: 'Bearer ' + token }
     });
-    if (!r.ok) return;
-    const d = await r.json();
-    if (!d.files || !d.files.length) return;
-    const r2 = await fetch(`https://www.googleapis.com/drive/v3/files/${d.files[0].id}?alt=media`, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
+    // Fallback: buscar por nombre si el ID fijo no es accesible
+    if (!r2.ok) {
+      const q = `name='SYNC_UPDATES.json' and trashed=false`;
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&orderBy=modifiedTime+desc`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d.files?.length) return;
+      fileId = d.files[0].id;
+      r2 = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+    }
     if (!r2.ok) return;
     const updates = await r2.json();
     if (!Array.isArray(updates)) return;
