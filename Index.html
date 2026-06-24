@@ -2097,9 +2097,22 @@ async function findOrCreateFolder_old(token) {
   return findOrCreateFolder(token, DRIVE_FOLDER || 'PREVIAL_VI_DATA');
 }
 
+const FIXED_ACRES_DATA_ID = '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h';
+
 async function findDataFile(token, folderId) {
-  // Buscar siempre por nombre — puede haber múltiples archivos, tomar el más reciente
-  const q = `name='${DRIVE_FILENAME}' and trashed=false`;
+  // Intentar con ID fijo primero
+  try {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_DATA_ID}?fields=id`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (r.ok) {
+      driveFileId = FIXED_ACRES_DATA_ID;
+      localStorage.setItem('bo_drive_file_id', driveFileId);
+      return driveFileId;
+    }
+  } catch(e) {}
+  // Fallback: buscar por nombre
+  const q = `name='ACRES_DATA.json' and trashed=false`;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`, {
     headers: { Authorization: 'Bearer ' + token }
   });
@@ -2107,7 +2120,6 @@ async function findDataFile(token, folderId) {
   if (data.files && data.files.length > 0) {
     driveFileId = data.files[0].id;
     localStorage.setItem('bo_drive_file_id', driveFileId);
-    console.log('ACRES_DATA fileId:', driveFileId, '· archivos encontrados:', data.files.length);
     return driveFileId;
   }
   return null;

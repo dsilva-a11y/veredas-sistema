@@ -1144,28 +1144,33 @@ window.addEventListener('load', () => {
 
 // Bajar la base completa de frentes desde ACRES_DATA.json
 async function cargarBaseCompletaDrive(token) {
+  // ID fijo de ACRES_DATA.json en Drive de d.silva@construmex.com.ar
+  const FIXED_ACRES_ID = '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h';
   try {
-    // Buscar ACRES_DATA.json en Drive (cualquier carpeta)
-    const q = `name='ACRES_DATA.json' and trashed=false`;
-    const sr = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime+desc`,
-      { headers: { Authorization: 'Bearer ' + token } }
-    );
-    if (!sr.ok) return;
-    const sd = await sr.json();
-    if (!sd.files?.length) {
-      syncLog('Sin ACRES_DATA.json en Drive — usá Publicar base en el backoffice', '#f0c050');
-      return;
-    }
-    const fileId = sd.files[0].id;
     syncLog('Bajando base completa de frentes...', '#4fa3e8');
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    let r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_ID}?alt=media`, {
       headers: { Authorization: 'Bearer ' + token }
     });
+    // Fallback: buscar por nombre si el ID fijo no es accesible
+    if (!r.ok) {
+      const q = `name='ACRES_DATA.json' and trashed=false`;
+      const sr = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime+desc`,
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      if (!sr.ok) return;
+      const sd = await sr.json();
+      if (!sd.files?.length) {
+        syncLog('Sin ACRES_DATA.json en Drive — usá Publicar base en el backoffice', '#f0c050');
+        return;
+      }
+      r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+    }
     if (!r.ok) return;
     const data = await r.json();
     if (!Array.isArray(data) || data.length === 0) return;
-    // Guardar la base completa
     DB.set('acres', data);
     syncLog(`✓ Base cargada: ${data.length} frentes`, '#3dd68c');
     showToast(`✓ Base cargada — ${data.length} frentes`);
