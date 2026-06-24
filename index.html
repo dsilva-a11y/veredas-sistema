@@ -560,11 +560,16 @@ function getDriveToken() {
 }
 
 // Crear carpeta en Drive si no existe, retorna el folder ID
+// ID fijo de la carpeta 01_VEREDAS en Drive de d.silva@construmex.com.ar
+// Todas las fotos de todos los inspectores van a esta carpeta
+const FIXED_VEREDAS_FOLDER_ID = '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv';
+
 async function ensureDriveFolder(path, token) {
   const parts = path.split('/').filter(Boolean);
-  let parentId = 'root';
-  for (const part of parts) {
-    // Buscar si ya existe
+  // Saltear la primera parte (01_VEREDAS) y usar el ID fijo directamente
+  let parentId = FIXED_VEREDAS_FOLDER_ID;
+  const subParts = parts.length > 1 ? parts.slice(1) : parts;
+  for (const part of subParts) {
     const searchRes = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(part)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
       { headers: { Authorization: 'Bearer ' + token } }
@@ -573,7 +578,6 @@ async function ensureDriveFolder(path, token) {
     if (searchData.files && searchData.files.length > 0) {
       parentId = searchData.files[0].id;
     } else {
-      // Crear carpeta
       const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -1227,6 +1231,7 @@ async function leerAsignacionesDrive() {
         if (u.pct !== undefined) a.pct = Number(u.pct);
         if (u.obs !== undefined) a.obs = u.obs;
         if (u.obs_g !== undefined) a.obs_g = u.obs_g;
+        if (u.obs_back !== undefined) a.obs_back = u.obs_back;
         if (u.dir) a.dir = u.dir;
         if (u.alt) a.alt = u.alt;
         if (u.com) a.com = u.com;
@@ -1242,7 +1247,7 @@ async function leerAsignacionesDrive() {
           dir: u.dir || '', alt: u.alt || '', com: u.com || '',
           area: u.area || 0, interv: u.interv || '', mat: u.mat || '',
           estado: u.estado || '-', pct: Number(u.pct) || 0,
-          resp: u.resp || '', obs: u.obs || '', obs_g: u.obs_g || '',
+          resp: u.resp || '', obs: u.obs || '', obs_g: u.obs_g || '', obs_back: u.obs_back || '',
           f_prog: u.f_prog||null, f_aper: u.f_aper||null, f_horm: u.f_horm||null,
           f_col: u.f_col||null, f_fin: u.f_fin||null, f_med: u.f_med||null,
         });
@@ -1779,8 +1784,9 @@ function openDetail(id) {
   // Obs del supervisor (backoffice) — solo si tiene contenido
   const obsGEl  = document.getElementById('d-obs-g');
   const obsGRow = document.getElementById('d-obs-g-row');
-  if (v.obs_g && v.obs_g.trim()) {
-    if (obsGEl)  obsGEl.textContent = v.obs_g;
+  const obsSuper = (v.obs_back && v.obs_back.trim()) || (v.obs_g && v.obs_g.trim());
+  if (obsSuper) {
+    if (obsGEl)  obsGEl.textContent = obsSuper;
     if (obsGRow) obsGRow.style.display = '';
   } else {
     if (obsGRow) obsGRow.style.display = 'none';

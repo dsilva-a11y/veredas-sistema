@@ -1001,6 +1001,8 @@ async function publicarAsignaciones(silencioso = false) {
         resp: a.resp || '',
         obs: existing.obs || a.obs || '',
         obs_g: a.obs_g || existing.obs_g || '',
+        obs_back: a.obs_back || existing.obs_back || '',
+        prio: a.prio || 0,
         f_prog: existing.f_prog || a.f_prog || null,
         f_aper: existing.f_aper || a.f_aper || null,
         f_horm: existing.f_horm || a.f_horm || null,
