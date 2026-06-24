@@ -529,7 +529,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
             <th onclick="sb('id')" style="cursor:pointer">Acre</th><th onclick="sb('dir')" style="cursor:pointer">Dirección</th><th>Com.</th>
             <th onclick="sb('area')" style="cursor:pointer">m²</th><th>Interv.</th><th>Materialidad</th>
             <th onclick="sb('estado')" style="cursor:pointer">Estado</th><th>Responsable</th>
-            <th onclick="sb('pct')" style="cursor:pointer">%</th><th>F. Fin</th><th>Obs. General</th>
+            <th onclick="sb('pct')" style="cursor:pointer">%</th><th>F. Fin</th><th title="Prioritario">P</th><th>Obs. General</th>
           </tr></thead><tbody id="tbody"></tbody></table>
         </div>
       </div>
@@ -762,8 +762,25 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </div>
           <!-- Fila 4: obs general -->
           <div style="margin-top:8px">
-            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Obs. General (supervisor)</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Obs. General (inspector)</div>
             <textarea id="mEditObsG" class="form-input" rows="2" placeholder="Observación visible para el inspector…" style="font-size:12px;padding:6px 8px;width:100%;resize:vertical"></textarea>
+          </div>
+          <!-- Fila: prioritario + f_med -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--line);border-radius:4px;padding:8px 10px">
+              <input type="checkbox" id="mEditPrio" style="width:16px;height:16px;accent-color:var(--yellow);cursor:pointer">
+              <label for="mEditPrio" style="font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer">★ Prioritario</label>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">F. Medición</div>
+              <input id="mEditFmed" class="form-input" type="date" style="font-size:12px;padding:6px 8px;width:100%">
+            </div>
+          </div>
+          <!-- Obs back (supervisor hacia inspector, visible en parte) -->
+          <div style="margin-top:8px">
+            <div style="font-size:11px;color:var(--accent);margin-bottom:4px;font-weight:600">📋 Obs. Supervisor (visible en parte diario)</div>
+            <textarea id="mEditObsBack" class="form-input" rows="2" placeholder="Ej: Falta resolver observación de grieta en junta. Volver a 98%…" style="font-size:12px;padding:6px 8px;width:100%;resize:vertical;border-color:rgba(232,98,58,.4)"></textarea>
+          </div>
           </div>
           <button onclick="guardarAvanceModal()" style="margin-top:8px;width:100%;padding:7px;background:var(--accent);color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer">💾 Guardar cambios</button>
         </div>
@@ -1077,7 +1094,13 @@ function guardarAvanceModal() {
   const ffinVal = document.getElementById('mEditFfin').value;
   if (ffinVal !== '') a.f_fin = ffinVal;
   const obsGVal = document.getElementById('mEditObsG').value.trim();
-  a.obs_g = obsGVal; // siempre actualiza (puede borrarse)
+  a.obs_g = obsGVal;
+  // Nuevos campos
+  a.prio = document.getElementById('mEditPrio').checked ? 1 : 0;
+  const fmedVal = document.getElementById('mEditFmed').value;
+  if (fmedVal) a.f_med = fmedVal;
+  const obsBackVal = document.getElementById('mEditObsBack').value.trim();
+  a.obs_back = obsBackVal;
   a._editado = true; // marcar que el backoffice editó este frente
   a._updated = new Date().toISOString(); // timestamp para resolución de conflictos
   // Actualizar vista del modal
@@ -1166,7 +1189,6 @@ function renderParte(){
   const fechaStr=dt.toLocaleDateString('es-AR',{day:'numeric',month:'numeric',year:'numeric'});
   document.getElementById('parteDate').textContent=fechaStr;
 
-  const ocultarCero=document.getElementById('ocultarCero')?.checked;
   const cuadrillas=document.getElementById('inputCuadrillas')?.value||'8';
   const operarios=document.getElementById('inputOperarios')?.value||'44';
 
@@ -1179,34 +1201,27 @@ function renderParte(){
   });
 
   const grupos={};
-  activos.forEach(a=>{
-    if(!grupos[a.resp])grupos[a.resp]=[];
-    grupos[a.resp].push(a);
-  });
-  Object.values(grupos).forEach(g=>g.sort((a,b)=>(b.pct||0)-(a.pct||0)));
+  activos.forEach(a=>{ if(!grupos[a.resp])grupos[a.resp]=[]; grupos[a.resp].push(a); });
+  // Prioritarios primero, luego por pct desc
+  Object.values(grupos).forEach(g=>g.sort((a,b)=>{
+    if((b.prio||0)!==(a.prio||0)) return (b.prio||0)-(a.prio||0);
+    return (b.pct||0)-(a.pct||0);
+  }));
   const ordResp=Object.keys(grupos).sort();
-
-  // Detectar frentes retrasados (pct<=25 con fecha programada anterior a hoy)
   const hoy=new Date(dateVal+'T12:00:00');
-  function esRetrasado(a){
-    if(!a.f_prog)return false;
-    const fp=new Date(a.f_prog+'T12:00:00');
-    return fp<hoy&&(a.pct||0)<=25;
-  }
 
   let filas='';
   ordResp.forEach(resp=>{
-    const frentes=grupos[resp];
-    frentes.forEach((a,i)=>{
-      const retr=esRetrasado(a);
-      const bg=retr?'background:#fff59d;color:#000':'background:#fff;color:#000';
-      const color_pct=retr?'color:#b8860b;font-weight:700':'color:#222;font-weight:700';
+    grupos[resp].forEach((a,i)=>{
+      const esPrio=!!(a.prio);
+      const bg=esPrio?'background:#fff59d;color:#000':'background:#fff;color:#000';
+      const cpct=esPrio?'color:#b8860b;font-weight:700':'color:#222;font-weight:700';
       filas+=`<tr style="${bg}">
-        <td style="padding:4px 8px;border:1px solid #ccc;font-weight:600;color:#333;vertical-align:top;background:inherit">${i===0?resp:''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;color:#000">${a.dir||''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;color:#000">${a.alt||''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;color:#000">${fmtDShort(a.f_prog)||''}</td>
-        <td style="padding:4px 8px;border:1px solid #ccc;text-align:center;${color_pct}">${a.pct||0}%</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-weight:600;color:#333;vertical-align:top;white-space:nowrap;background:inherit">${i===0?resp:''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;color:#000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.dir||''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#000;white-space:nowrap;width:52px">${a.alt||''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#000;white-space:nowrap;width:72px">${fmtDShort(a.f_prog)||''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;${cpct};white-space:nowrap;width:52px">${a.pct||0}%</td>
       </tr>`;
     });
   });
@@ -1216,51 +1231,36 @@ function renderParte(){
     return;
   }
 
-  const html=`<div id="parteImprimible" style="font-family:Arial,sans-serif;font-size:12px;color:#000;padding:16px">
-    <!-- HEADER -->
-    <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
-      <tr>
-        <td style="width:33%;font-size:16px;font-weight:900;letter-spacing:.05em">PARTE</td>
-        <td style="width:33%;text-align:center;font-size:20px;font-weight:900">${fechaStr}</td>
-        <td style="width:33%;text-align:right">
-          <span style="font-size:18px;font-weight:900;color:#c0392b">CONSTRUMEX</span>
-          <span style="font-size:10px;color:#999"> S.A.</span>
-        </td>
-      </tr>
-    </table>
-    <div style="border-top:3px solid #333;border-bottom:1px solid #ccc;padding:6px 0;margin-bottom:10px">
+  const html=`<div id="parteImprimible" style="font-family:Arial,sans-serif;font-size:11px;color:#000;padding:12px">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:6px"><tr>
+      <td style="width:33%;font-size:15px;font-weight:900;letter-spacing:.05em">PARTE</td>
+      <td style="width:33%;text-align:center;font-size:17px;font-weight:900">${fechaStr}</td>
+      <td style="width:33%;text-align:right"><span style="font-size:15px;font-weight:900;color:#c0392b">CONSTRUMEX</span><span style="font-size:10px;color:#999"> S.A.</span></td>
+    </tr></table>
+    <div style="border-top:3px solid #333;border-bottom:1px solid #ccc;padding:3px 0;margin-bottom:7px">
       <table style="width:100%;border-collapse:collapse">
-        <tr>
-          <td style="font-weight:700;padding:2px 8px">CUADRILLAS</td>
-          <td style="padding:2px 8px">${cuadrillas}</td>
-          <td style="width:70%"></td>
-        </tr>
-        <tr>
-          <td style="font-weight:700;padding:2px 8px">OPERARIOS</td>
-          <td style="padding:2px 8px">${operarios}</td>
-        </tr>
+        <tr><td style="font-weight:700;padding:2px 6px">CUADRILLAS</td><td style="padding:2px 6px">${cuadrillas}</td><td style="width:70%"></td></tr>
+        <tr><td style="font-weight:700;padding:2px 6px">OPERARIOS</td><td style="padding:2px 6px">${operarios}</td></tr>
       </table>
     </div>
-    <!-- TABLA PRINCIPAL -->
-    <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-      <thead>
-        <tr style="background:#555;color:#fff">
-          <th style="padding:5px 8px;border:1px solid #999;text-align:left;width:80px">RESPONSABLE</th>
-          <th style="padding:5px 8px;border:1px solid #999;text-align:left">DIRECCIÓN</th>
-          <th style="padding:5px 8px;border:1px solid #999;text-align:center;width:60px">ALTURA</th>
-          <th style="padding:5px 8px;border:1px solid #999;text-align:center;width:90px">FECHA PROGR.</th>
-          <th style="padding:5px 8px;border:1px solid #999;text-align:center;width:80px">%Completado</th>
-        </tr>
-      </thead>
+    <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+      <thead><tr style="background:#555;color:#fff">
+        <th style="padding:4px 6px;border:1px solid #999;text-align:left;white-space:nowrap">RESPONSABLE</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:left">DIRECCIÓN</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:center;width:52px">ALTURA</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:center;width:72px">FECHA PROGR.</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:center;width:52px">%</th>
+      </tr></thead>
       <tbody>${filas}</tbody>
     </table>
-    <div style="margin-top:6px;font-size:10px;color:#888">
-      <span style="background:#fff59d;padding:2px 6px;border:1px solid #ccc">Amarillo = frente retrasado (fecha vencida con menos de 25% de avance)</span>
+    <div style="margin-top:5px;font-size:9px;color:#888">
+      <span style="background:#fff59d;padding:1px 5px;border:1px solid #ccc">Amarillo = Prioritario</span>
     </div>
   </div>`;
 
   document.getElementById('parteContent').innerHTML=html;
 }
+
 
 // ─── HORMIGON ─────────────────────────────────────────────────────
 let viajes=JSON.parse(localStorage.getItem('veredas_viajes')||'{}');
@@ -1284,7 +1284,8 @@ function renderHormigon(){
   ALL.forEach(a=>{acreByDirAlt[(a.dir+'|'+a.alt).toUpperCase()]=a;});
 
   dayViajes.forEach((v,idx)=>{
-    html+=`<div class="viaje-card">
+    const sinRemito = !v.remito;
+    html+=`<div class="viaje-card" style="${sinRemito?'border-color:var(--yellow);':''}">
       <div class="viaje-header">
         <div class="viaje-num">${idx+1}</div>
         <div class="viaje-info">
@@ -1300,7 +1301,10 @@ function renderHormigon(){
             &nbsp;·&nbsp; Árido: <input style="background:var(--bg4);border:none;color:var(--text2);font-size:12px;font-family:var(--fb);width:70px;padding:2px 6px;border-radius:2px;" value="${v.arido||'P.6/20'}" onchange="updateViaje(${idx},'arido',this.value)" placeholder="P.6/20">
             &nbsp;·&nbsp; Horario: <input style="background:var(--bg4);border:none;color:var(--text2);font-size:12px;font-family:var(--fb);width:70px;padding:2px 6px;border-radius:2px;" value="${v.horario||''}" onchange="updateViaje(${idx},'horario',this.value)" placeholder="15:00">
           </div>
-          <div class="viaje-meta">Nº Remito: <input style="background:transparent;border:none;border-bottom:1px solid var(--line2);color:var(--text3);font-size:11px;font-family:var(--fb);width:80px;padding:1px 4px;" value="${v.remito||''}" onchange="updateViaje(${idx},'remito',this.value)" placeholder="—"></div>
+          <div class="viaje-meta" style="${sinRemito?'color:var(--yellow);font-weight:600;':''}">
+            Nº Remito: <input style="background:transparent;border:none;border-bottom:1px solid ${sinRemito?'var(--yellow)':'var(--line2)'};color:${sinRemito?'var(--yellow)':'var(--text3)'};font-size:11px;font-family:var(--fb);width:80px;padding:1px 4px;font-weight:${sinRemito?'700':'400'}" value="${v.remito||''}" onchange="updateViaje(${idx},'remito',this.value)" placeholder="—">
+            ${sinRemito?'<span style="font-size:10px;color:var(--yellow);margin-left:6px">⚠ Sin remito</span>':''}
+          </div>
         </div>
         <button class="btn br2" onclick="removeViaje(${idx})" style="flex-shrink:0;">✕</button>
       </div>
@@ -1795,6 +1799,7 @@ function renderTable(){
     <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${respColor(a.resp)}"></span>${a.resp||'—'}</span></td>
     <td><div class="pbw"><div class="pbt2"><div class="pbf" style="width:${a.pct}%;background:${pctColor(a.pct)}"></div></div><span style="font-size:10.5px;font-weight:700;min-width:28px;text-align:right;color:${pctColor(a.pct)}">${a.pct}%</span></div></td>
     <td class="tss">${fmtDShort(a.f_fin)}</td>
+    <td style="text-align:center;color:var(--yellow);font-size:13px">${a.prio?'★':''}</td>
     <td class="tss" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic">${a.obs_g||'—'}</td>
   </tr>`).join('');
   const total=Math.ceil(filtered.length/PER);
@@ -1866,6 +1871,9 @@ function openModal(id){
   document.getElementById('mEditMat').value = a.mat || '';
   document.getElementById('mEditFfin').value = a.f_fin || '';
   document.getElementById('mEditObsG').value = a.obs_g || '';
+  document.getElementById('mEditPrio').checked = !!(a.prio);
+  document.getElementById('mEditFmed').value = a.f_med || '';
+  document.getElementById('mEditObsBack').value = a.obs_back || '';
   const rv=document.getElementById('mRespAv');rv.textContent=(a.resp||'—').slice(0,2);rv.style.background=respColor(a.resp);
   document.getElementById('mResp').textContent=a.resp||'Sin asignar';
   document.getElementById('mPct').textContent=a.pct+'%';
@@ -2096,7 +2104,7 @@ async function downloadDataFile(token, fileId) {
 
 // Fusionar cambios del JSON de Drive sobre ALL (solo campos operativos)
 function mergeAcresData(updates) {
-  const CAMPOS = ['estado','pct','resp','obs','obs_g','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
+  const CAMPOS = ['estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
   let count = 0;
   const idx = {};
   ALL.forEach((a,i) => idx[a.id] = i);
@@ -2126,7 +2134,7 @@ function mergeAcresData(updates) {
 
 // Exportar ALL como array compacto (solo campos que pueden cambiar)
 function exportAcresData() {
-  const CAMPOS = ['id','dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
+  const CAMPOS = ['id','dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
   return ALL.map(a => {
     const o = {};
     CAMPOS.forEach(f => o[f] = a[f] ?? null);
@@ -2535,7 +2543,9 @@ function initHormDB() {
         remito: v.remito || '',
         horario: v.horario || '',
         frentes: v.frentes || [],
-        responsables: [...respSet].join(', ') || '—'
+        responsables: [...respSet].join(', ') || '—',
+        _fecha: fecha,
+        _viajeIdx: dayViajes.indexOf(v)
       });
     }
   }
@@ -2629,6 +2639,7 @@ function initHormDB() {
             <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">Nº REMITO</th>
             <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">RESPONSABLE</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">FRENTES</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">ACCIONES</th>
           </tr>
         </thead>
         <tbody>
@@ -2640,14 +2651,18 @@ function initHormDB() {
               <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--accent)">${d.m3}</td>
               <td style="padding:7px 10px;color:var(--text3)">${d.arido}</td>
               <td style="padding:7px 10px;color:var(--text3)">${d.horario}</td>
-              <td style="padding:7px 10px">${d.remito||'—'}</td>
+              <td style="padding:7px 10px;${!d.remito?'color:var(--yellow);font-weight:600':''}">${d.remito||'⚠ Sin remito'}</td>
               <td style="padding:7px 10px">${d.responsables}</td>
               <td style="padding:7px 10px;text-align:center;color:var(--text3)">${d.frentes.length}</td>
+              <td style="padding:7px 10px;text-align:center;white-space:nowrap">
+                <button onclick="editarViajeDB('${d._fecha}',${d._viajeIdx})" style="background:var(--bg4);border:1px solid var(--line2);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;margin-right:4px">✏ Editar</button>
+                <button onclick="eliminarViajeDB('${d._fecha}',${d._viajeIdx})" style="background:rgba(232,80,80,.1);border:1px solid rgba(232,80,80,.3);color:var(--red);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer">✕ Borrar</button>
+              </td>
             </tr>`).join('')}
           <tr style="background:var(--bg3);font-weight:700;border-top:2px solid var(--line)">
             <td colspan="3" style="padding:8px 10px">Total ${mesLabel}</td>
             <td style="padding:8px 10px;text-align:right;color:var(--accent)">${totalM3.toFixed(1)}</td>
-            <td colspan="5"></td>
+            <td colspan="6"></td>
           </tr>
         </tbody>
       </table>
@@ -2721,6 +2736,30 @@ async function findOrCreateFolder(token, name = null) {
   });
   const cd = await cr.json();
   return cd.id;
+}
+
+function eliminarViajeDB(fecha, idx) {
+  if (!confirm(`¿Eliminar el viaje ${idx+1} del ${fecha.split('-').reverse().join('/')}?`)) return;
+  if (viajes[fecha]) {
+    viajes[fecha].splice(idx, 1);
+    if (!viajes[fecha].length) delete viajes[fecha];
+    saveViajes();
+    initHormDB();
+    showToast('Viaje eliminado');
+  }
+}
+
+function editarViajeDB(fecha, idx) {
+  const v = viajes[fecha]?.[idx];
+  if (!v) return;
+  document.getElementById('hormInputDate').value = fecha;
+  switchHormTab('parte', document.getElementById('htab-parte'));
+  renderHormigon();
+  showToast('Editá el viaje ' + (idx+1) + ' del ' + fecha.split('-').reverse().join('/'));
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.viaje-card');
+    if (cards[idx]) cards[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 200);
 }
 
 function switchHormTab(tab, el) {

@@ -1694,13 +1694,8 @@ function openDetail(id) {
     chip.textContent = e?.name + (tieneInfo ? ' ✓' : ' — sin datos') + syncPendiente;
   } else {
     chip.className = 'chip ' + (e.chip || '');
-    // Mostrar etapa actual con su pct fijo — si el pctReal difiere, mostrarlo entre paréntesis
-    const pctEtapa = e.pct !== null ? e.pct : 0;
-    if (pctReal !== pctEtapa && pctReal > 0) {
-      chip.textContent = e.name + ' · ' + pctEtapa + '% (real: ' + pctReal + '%)' + syncPendiente;
-    } else {
-      chip.textContent = e.name + ' · ' + pctEtapa + '%' + syncPendiente;
-    }
+    // Mostrar solo el pct real — sin mezclar con el pct fijo de la etapa
+    chip.textContent = e.name + ' · ' + pctReal + '%' + syncPendiente;
   }
   if (v._syncPending) {
     chip.title = 'Cambio guardado localmente — pendiente de sync con el backoffice';
