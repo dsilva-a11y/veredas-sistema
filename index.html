@@ -1142,10 +1142,49 @@ window.addEventListener('load', () => {
   }
 });
 
-// Leer SYNC_UPDATES.json del Drive y actualizar datos locales
+// Bajar la base completa de frentes desde ACRES_DATA.json
+async function cargarBaseCompletaDrive(token) {
+  try {
+    // Buscar ACRES_DATA.json en Drive (cualquier carpeta)
+    const q = `name='ACRES_DATA.json' and trashed=false`;
+    const sr = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime+desc`,
+      { headers: { Authorization: 'Bearer ' + token } }
+    );
+    if (!sr.ok) return;
+    const sd = await sr.json();
+    if (!sd.files?.length) {
+      syncLog('Sin ACRES_DATA.json en Drive — usá Publicar base en el backoffice', '#f0c050');
+      return;
+    }
+    const fileId = sd.files[0].id;
+    syncLog('Bajando base completa de frentes...', '#4fa3e8');
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) return;
+    // Guardar la base completa
+    DB.set('acres', data);
+    syncLog(`✓ Base cargada: ${data.length} frentes`, '#3dd68c');
+    showToast(`✓ Base cargada — ${data.length} frentes`);
+  } catch(e) {
+    syncLog('Error cargando base: ' + e.message, '#ff5252');
+  }
+}
+
+
 async function leerAsignacionesDrive() {
   const token = getDriveToken();
   if (!token) return;
+
+  // Si la base local tiene pocos frentes (seed inicial), bajar la base completa primero
+  const acresLocales = DB.get('acres', []);
+  if (acresLocales.length <= 3) {
+    await cargarBaseCompletaDrive(token);
+  }
+
   const FIXED_SYNC_ID = '1YuC6L-G340iHYdkfDAli5gKxZZroOekT';
   try {
     // Intentar con ID fijo primero
