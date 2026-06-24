@@ -329,7 +329,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
         <!-- Mapa -->
         <div id="mapaAppDiv" style="flex:1;width:100%"></div>
         <!-- Navbar -->
-        <nav class="navbar">
+        <nav class="nav-bar">
           <div class="nav-tab" onclick="switchTab('home',this)"><span class="nav-icon">🏠</span><span class="nav-label">Inicio</span></div>
           <div class="nav-tab active" onclick="switchTab('mapa',this)"><span class="nav-icon">🗺️</span><span class="nav-label">Mapa</span></div>
           <div class="nav-tab" onclick="switchTab('sync',this)"><span class="nav-icon">☁️</span><span class="nav-label">Sync</span></div>
@@ -363,7 +363,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
       </div>
       <div class="scroll-area" style="padding:12px 0">
         <div class="menu-item"><span class="menu-icon">📊</span><span class="menu-label">Relevamientos cargados</span><span class="menu-val" id="profileStatsRelev">0</span><span class="menu-arrow">›</span></div>
-        <div class="menu-item"><span class="menu-icon">📷</span><span class="menu-label">Fotos guardadas</span><span class="menu-val" id="profileStatsFotos">0</span><span class="menu-arrow">›</span></div>
+        <div class="menu-item" onclick="mostrarInfoFotos()"><span class="menu-icon">📷</span><span class="menu-label">Fotos guardadas</span><span class="menu-val" id="profileStatsFotos">0</span><span class="menu-arrow">›</span></div>
         <div class="menu-item"><span class="menu-icon">💾</span><span class="menu-label">Espacio usado</span><span class="menu-val" id="profileStorageUsed">0 MB</span><span class="menu-arrow">›</span></div>
         <div class="menu-item"><span class="menu-icon">📡</span><span class="menu-label">Google Drive</span><span class="menu-val" id="profileServerStatus">No conectado</span><span class="menu-arrow">›</span></div>
         <div class="menu-item" onclick="clearLocalData()"><span class="menu-icon" style="color:var(--red)">🗑️</span><span class="menu-label" style="color:var(--red)">Borrar datos locales</span></div>
@@ -792,6 +792,10 @@ async function syncToDrive() {
       p.fotosSubidas = fotosSubidas;
       ok++;
       syncLog('✓ ' + p.acreId + ' — ' + fotosSubidas + ' fotos subidas', '#4caf50');
+      // Limpiar flag de sync pendiente en el acre
+      const acresSync = DB.get('acres', []);
+      const aSync = acresSync.find(x => x.id === p.acreId);
+      if (aSync) { aSync._syncPending = false; DB.set('acres', acresSync); }
 
       // Actualizar bitácora del acre en Drive
       try {
@@ -1516,13 +1520,21 @@ function getGeoCacheApp() {
 function saveGeoCacheApp(c) { localStorage.setItem('geo_cache_app', JSON.stringify(c)); }
 
 async function geocodificarDirApp(dir, alt) {
-  const q = encodeURIComponent(`${dir} ${alt}, Buenos Aires, Argentina`);
+  // Viewbox exacto de CABA
+  const CABA_BOX = '-58.532,-34.705,-58.334,-34.527';
+  const q = encodeURIComponent(`${dir} ${alt}, Ciudad Autónoma de Buenos Aires, Argentina`);
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=ar`, {
-      headers: { 'Accept-Language': 'es', 'User-Agent': 'PREVIAL-CONSTRUMEX/1.0' }
-    });
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=3&countrycodes=ar&viewbox=${CABA_BOX}&bounded=1`,
+      { headers: { 'Accept-Language': 'es', 'User-Agent': 'PREVIAL-CONSTRUMEX/1.0' } }
+    );
     const d = await r.json();
-    if (d[0]) return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+    // Doble verificación: el resultado debe estar dentro de CABA
+    const res = (d || []).find(item => {
+      const lat = parseFloat(item.lat), lng = parseFloat(item.lon);
+      return lat >= -34.705 && lat <= -34.527 && lng >= -58.532 && lng <= -58.334;
+    });
+    if (res) return { lat: parseFloat(res.lat), lng: parseFloat(res.lon) };
   } catch(e) {}
   return null;
 }
@@ -1659,13 +1671,17 @@ function openDetail(id) {
   document.getElementById('d-dir').textContent = v.direccion;
   const chip = document.getElementById('d-chip');
   const pctReal = Number(v.pct || 0);
+  const syncPendiente = v._syncPending ? ' ⏳' : '';
   if (!e || e.key === 'INICIAL' || pctReal === 0) {
     const tieneInfo = (v.resp||v.responsable||'').trim() || v.f_prog || v.obs_g?.trim();
     chip.className = 'chip ' + (tieneInfo ? 'chip-ini-ok' : 'chip-ini-empty');
-    chip.textContent = e?.name + (tieneInfo ? ' ✓' : ' — sin datos');
+    chip.textContent = e?.name + (tieneInfo ? ' ✓' : ' — sin datos') + syncPendiente;
   } else {
     chip.className = 'chip ' + (e.chip || '');
-    chip.textContent = e.name + ' · ' + pctReal + '%';
+    chip.textContent = e.name + ' · ' + pctReal + '%' + syncPendiente;
+  }
+  if (v._syncPending) {
+    chip.title = 'Cambio guardado localmente — pendiente de sync con el backoffice';
   }
   document.getElementById('d-comuna').textContent = 'Comuna ' + (v.com || v.comuna || '—');
   document.getElementById('d-mat').textContent = v.mat || v.material || '—';
@@ -1673,14 +1689,14 @@ function openDetail(id) {
   document.getElementById('d-interv').textContent = v.interv || '—';
   document.getElementById('d-resp').textContent = v.resp || v.responsable || 'Sin asignar';
   document.getElementById('d-note').textContent = v.obs || v.nota || '—';
-  // Obs. del supervisor (backoffice)
-  const obsGEl = document.getElementById('d-obs-g');
+  // Obs del supervisor (backoffice) — solo si tiene contenido
+  const obsGEl  = document.getElementById('d-obs-g');
   const obsGRow = document.getElementById('d-obs-g-row');
   if (v.obs_g && v.obs_g.trim()) {
-    obsGEl.textContent = v.obs_g;
-    obsGRow.style.display = '';
+    if (obsGEl)  obsGEl.textContent = v.obs_g;
+    if (obsGRow) obsGRow.style.display = '';
   } else {
-    obsGRow.style.display = 'none';
+    if (obsGRow) obsGRow.style.display = 'none';
   }
   const dirDisplay = (v.dir || v.direccion || '') + (v.alt || v.altura ? ' ' + (v.alt || v.altura) : '');
   document.getElementById('d-dir').textContent = dirDisplay || v.id;
@@ -1693,7 +1709,14 @@ function openDetail(id) {
     const step = document.createElement('div'); step.className = 'step';
     const circle = document.createElement('div');
     circle.className = 'step-circle ' + (i < idx ? 'done' : i === idx ? 'current' : 'pending');
-    circle.textContent = i < idx ? '✓' : (s.pct !== null ? s.pct + '%' : s.icon);
+    // Mostrar el pct REAL del frente en el círculo activo, no el pct fijo del estado
+    if (i < idx) {
+      circle.textContent = '✓';
+    } else if (i === idx) {
+      circle.textContent = pctReal > 0 ? pctReal + '%' : (s.pct !== null ? s.pct + '%' : s.icon);
+    } else {
+      circle.textContent = s.pct !== null ? s.pct + '%' : s.icon;
+    }
     const label = document.createElement('div'); label.className = 'step-label'; label.textContent = s.name;
     step.appendChild(circle); step.appendChild(label); stepsEl.appendChild(step);
   });
@@ -1745,18 +1768,19 @@ function openRelevamiento() {
 
 function renderResponsableSelect() {
   const sel = document.getElementById('respSelect');
-  const actual = currentAcre.responsable || RESPONSABLES[0];
-  sel.innerHTML = RESPONSABLES.map(r => `<option value="${r}" ${r === actual ? 'selected' : ''}>${r}</option>`).join('') + `<option value="__nuevo__">+ Agregar nuevo responsable...</option>`;
-  sel.onchange = () => {
-    if (sel.value === '__nuevo__') {
-      const nuevo = prompt('Nombre o iniciales del nuevo responsable:');
-      if (nuevo && nuevo.trim()) {
-        const n = nuevo.trim().toUpperCase();
-        if (!RESPONSABLES.includes(n)) { RESPONSABLES.push(n); DB.set('responsables', RESPONSABLES); }
-        renderResponsableSelect(); sel.value = n;
-      } else { sel.value = actual; }
-    }
-  };
+  // El responsable lo asigna el backoffice - en la app es solo lectura
+  const actual = currentAcre.resp || currentAcre.responsable || '—';
+  // Reemplazar el select por un campo de solo lectura
+  const parent = sel.parentElement;
+  sel.style.display = 'none';
+  let readonlyEl = parent.querySelector('.resp-readonly');
+  if (!readonlyEl) {
+    readonlyEl = document.createElement('div');
+    readonlyEl.className = 'resp-readonly';
+    readonlyEl.style.cssText = 'padding:10px 14px;background:var(--bg3);border:1px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:center;justify-content:space-between';
+    parent.appendChild(readonlyEl);
+  }
+  readonlyEl.innerHTML = `<span>${actual}</span><span style="font-size:10px;color:var(--ink3);font-weight:400">Asignado por supervisor</span>`;
 }
 
 function renderStateOptions() {
@@ -1902,31 +1926,88 @@ function renderPhotos() {
     }
   }
   const count = photosCaptured.filter(p => !p.loading).length;
-  document.getElementById('photoCount').textContent = `${count} de 2 mínimas${count >= 2 ? ' ✓' : ''}`;
-  document.getElementById('photoCount').style.color = count >= 2 ? 'var(--green)' : 'var(--ink3)';
+  const countEl = document.getElementById('photoCount');
+  if (count === 0) {
+    countEl.textContent = 'Sin fotos — recomendado mín. 2';
+    countEl.style.color = 'var(--yellow)';
+  } else if (count === 1) {
+    countEl.textContent = '1 foto — se recomiendan 2 o más';
+    countEl.style.color = 'var(--yellow)';
+  } else {
+    countEl.textContent = `${count} foto${count>1?'s':''} ✓`;
+    countEl.style.color = 'var(--green)';
+  }
 }
 
 function updateSendBtn() {
   const btn = document.getElementById('sendBtn');
   const count = photosCaptured.filter(p => !p.loading).length;
   const stillLoading = photosCaptured.some(p => p.loading);
-  const ok = count >= 2 && selectedState && !stillLoading;
-  btn.disabled = !ok;
-  btn.textContent = stillLoading ? 'Procesando foto...' : ok ? `Enviar relevamiento (${count} fotos)` : `Faltan ${count < 2 ? (2-count) + ' foto(s)' : 'datos'}`;
+  const tieneEstado = !!selectedState;
+
+  if (stillLoading) {
+    btn.disabled = true;
+    btn.textContent = 'Procesando foto...';
+    btn.style.background = '';
+    return;
+  }
+  if (!tieneEstado) {
+    btn.disabled = true;
+    btn.textContent = 'Seleccioná un estado';
+    btn.style.background = '';
+    return;
+  }
+  // Siempre habilitar si hay estado — las fotos son recomendadas, no obligatorias
+  btn.disabled = false;
+  if (count === 0) {
+    btn.textContent = '⚠ Enviar sin fotos';
+    btn.style.background = 'var(--yellow)';
+    btn.style.color = '#000';
+  } else if (count === 1) {
+    btn.textContent = '⚠ Enviar con 1 foto (mín. 2)';
+    btn.style.background = 'var(--yellow)';
+    btn.style.color = '#000';
+  } else {
+    btn.textContent = `Enviar relevamiento (${count} fotos)`;
+    btn.style.background = '';
+    btn.style.color = '';
+  }
 }
 
 async function sendRelevamiento() {
+  const count = photosCaptured.filter(p => !p.loading).length;
+
+  // Advertencia si faltan fotos
+  if (count === 0) {
+    const confirmar = confirm(
+      '⚠ ADVERTENCIA: Estás enviando sin fotos.\n\n' +
+      'Se requieren al menos 2 fotos para documentar el avance.\n\n' +
+      '¿Querés continuar de todas formas?\n' +
+      '(Podés volver y agregar fotos antes de enviar)'
+    );
+    if (!confirmar) return;
+  } else if (count === 1) {
+    const confirmar = confirm(
+      '⚠ ATENCIÓN: Solo tenés 1 foto.\n\n' +
+      'Se recomiendan al menos 2 fotos para documentar correctamente el avance.\n\n' +
+      '¿Querés enviar con 1 sola foto?'
+    );
+    if (!confirmar) return;
+  }
+
   const acres = DB.get('acres', []);
   const v = acres.find(x => x.id === currentId);
   const e = ESTADOS[estadoIdx(selectedState)];
   const obs = document.getElementById('obsInput').value.trim() || '';
-  const resp = document.getElementById('respSelect').value;
+  const resp = currentAcre.resp || currentAcre.responsable || '—';
   const fecha = new Date().toISOString().split('T')[0];
   const fechaLabel = fecha.replace(/-/g,'');
 
-  // Actualizar estado del acre
+  // Actualizar estado del acre — inmediatamente visible (optimista)
   v.estado = selectedState;
+  v.pct = e.pct;  // actualizar también el pct para que la barra lo muestre
   v.responsable = resp;
+  v._syncPending = true;  // flag: pendiente de confirmar con el back
   v.nota = 'Actualizado ' + new Date().toLocaleDateString('es-AR');
 
   // Block de notas: historial cronológico de observaciones
@@ -1978,6 +2059,25 @@ async function sendRelevamiento() {
     navigate('success');
     renderHome();
   }
+}
+
+function mostrarInfoFotos() {
+  const pendientes = DB.get('pendientes', []);
+  const sinSync = pendientes.filter(p => !p.sincronizado);
+  const conSync = pendientes.filter(p => p.sincronizado);
+  const totalFotos = pendientes.reduce((s,p) => s + (p.fotosCount||0), 0);
+  const fotosEnCelular = pendientes.filter(p=>!p.sincronizado).reduce((s,p)=>s+(p.fotosCount||0),0);
+  const fotosEnDrive = pendientes.filter(p=>p.sincronizado).reduce((s,p)=>s+(p.fotosSubidas||0),0);
+
+  const msg = `📷 FOTOS GUARDADAS\n\n` +
+    `Total: ${totalFotos} fotos\n` +
+    `• En este celular: ${fotosEnCelular} fotos (${sinSync.length} relevamientos pendientes)\n` +
+    `• Subidas a Drive: ${fotosEnDrive} fotos (${conSync.length} relevamientos sincronizados)\n\n` +
+    `📁 UBICACIÓN EN DRIVE:\n` +
+    `01_VEREDAS / [ACRE]_[CALLE] / [ETAPA] / [FECHA]\n\n` +
+    `${sinSync.length > 0 ? '⚠ Tenés ' + sinSync.length + ' relevamiento(s) sin subir a Drive.\nAndá a la pestaña Sync para subirlos.' : '✓ Todas las fotos están sincronizadas en Drive.'}`;
+
+  alert(msg);
 }
 
 function goHomeFromSuccess() { switchTab('home', findTab('home')); }

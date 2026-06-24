@@ -2009,6 +2009,9 @@ function checkOAuthCallback() {
     const token = p.get('access_token');
     if (token) {
       driveToken = token;
+      // Compartir token con la app de medición
+      localStorage.setItem('med_drive_token', token);
+      localStorage.setItem('med_drive_token_ts', Date.now().toString());
       // Limpiar la URL
       history.replaceState(null, '', window.location.pathname);
       // Ejecutar acción pendiente
