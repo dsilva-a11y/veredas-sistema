@@ -1217,11 +1217,11 @@ function renderParte(){
       const bg=esPrio?'background:#fff59d;color:#000':'background:#fff;color:#000';
       const cpct=esPrio?'color:#b8860b;font-weight:700':'color:#222;font-weight:700';
       filas+=`<tr style="${bg}">
-        <td style="padding:3px 6px;border:1px solid #ccc;font-weight:600;color:#333;vertical-align:top;white-space:nowrap;background:inherit">${i===0?resp:''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-weight:600;color:#333;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:inherit">${i===0?resp:''}</td>
         <td style="padding:3px 6px;border:1px solid #ccc;color:#000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.dir||''}</td>
-        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#000;white-space:nowrap;width:52px">${a.alt||''}</td>
-        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#000;white-space:nowrap;width:72px">${fmtDShort(a.f_prog)||''}</td>
-        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;${cpct};white-space:nowrap;width:52px">${a.pct||0}%</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#000;white-space:nowrap">${a.alt||''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#000;white-space:nowrap">${fmtDShort(a.f_prog)||''}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;text-align:center;${cpct};white-space:nowrap">${a.pct||0}%</td>
       </tr>`;
     });
   });
@@ -1243,13 +1243,20 @@ function renderParte(){
         <tr><td style="font-weight:700;padding:2px 6px">OPERARIOS</td><td style="padding:2px 6px">${operarios}</td></tr>
       </table>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+    <table style="width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed">
+      <colgroup>
+        <col style="width:75px">
+        <col style="width:auto">
+        <col style="width:52px">
+        <col style="width:72px">
+        <col style="width:48px">
+      </colgroup>
       <thead><tr style="background:#555;color:#fff">
-        <th style="padding:4px 6px;border:1px solid #999;text-align:left;white-space:nowrap">RESPONSABLE</th>
-        <th style="padding:4px 6px;border:1px solid #999;text-align:left">DIRECCIÓN</th>
-        <th style="padding:4px 6px;border:1px solid #999;text-align:center;width:52px">ALTURA</th>
-        <th style="padding:4px 6px;border:1px solid #999;text-align:center;width:72px">FECHA PROGR.</th>
-        <th style="padding:4px 6px;border:1px solid #999;text-align:center;width:52px">%</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">RESP.</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">DIRECCIÓN</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:center">ALT.</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:center">F.PROG.</th>
+        <th style="padding:4px 6px;border:1px solid #999;text-align:center">%</th>
       </tr></thead>
       <tbody>${filas}</tbody>
     </table>

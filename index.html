@@ -386,7 +386,6 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
         <div class="detail-dir" id="d-dir">—</div>
         <div class="detail-estado"><span class="chip" id="d-chip">—</span></div>
       </div>
-      <div style="background:var(--bg2); flex-shrink:0;"><div class="steps" id="d-steps"></div></div>
       <div class="scroll-area">
         <div class="section-title">Datos del acre</div>
         <div class="card" style="margin:0 16px">
@@ -1688,18 +1687,26 @@ function openDetail(id) {
   const chip = document.getElementById('d-chip');
   const pctReal = Number(v.pct || 0);
   const syncPendiente = v._syncPending ? ' ⏳' : '';
-  if (!e || e.key === 'INICIAL' || pctReal === 0) {
+
+  // Derivar la etapa DESDE el pct real (no desde v.estado que puede estar desincronizado)
+  let eChip;
+  if (pctReal === 0)        eChip = ESTADOS[0];  // INICIAL
+  else if (pctReal <= 1)    eChip = ESTADOS[1];  // PROGRAMADO
+  else if (pctReal <= 25)   eChip = ESTADOS[2];  // APERTURA
+  else if (pctReal <= 50)   eChip = ESTADOS[3];  // HORMIGONADO
+  else if (pctReal <= 75)   eChip = ESTADOS[4];  // COLOCACION
+  else if (pctReal <= 98)   eChip = ESTADOS[5];  // CON OBSERVACIONES
+  else                      eChip = ESTADOS[6];  // FINALIZADO
+
+  if (pctReal === 0) {
     const tieneInfo = (v.resp||v.responsable||'').trim() || v.f_prog || v.obs_g?.trim();
     chip.className = 'chip ' + (tieneInfo ? 'chip-ini-ok' : 'chip-ini-empty');
-    chip.textContent = e?.name + (tieneInfo ? ' ✓' : ' — sin datos') + syncPendiente;
+    chip.textContent = eChip.name + (tieneInfo ? ' ✓' : ' — sin datos') + syncPendiente;
   } else {
-    chip.className = 'chip ' + (e.chip || '');
-    // Mostrar solo el pct real — sin mezclar con el pct fijo de la etapa
-    chip.textContent = e.name + ' · ' + pctReal + '%' + syncPendiente;
+    chip.className = 'chip ' + (eChip.chip || '');
+    chip.textContent = eChip.name + ' · ' + pctReal + '%' + syncPendiente;
   }
-  if (v._syncPending) {
-    chip.title = 'Cambio guardado localmente — pendiente de sync con el backoffice';
-  }
+  if (v._syncPending) chip.title = 'Cambio guardado localmente — pendiente de sync con el backoffice';
   document.getElementById('d-comuna').textContent = 'Comuna ' + (v.com || v.comuna || '—');
   document.getElementById('d-mat').textContent = v.mat || v.material || '—';
   document.getElementById('d-sup').textContent = (v.area || 0) + ' m²';
@@ -1718,27 +1725,6 @@ function openDetail(id) {
   const dirDisplay = (v.dir || v.direccion || '') + (v.alt || v.altura ? ' ' + (v.alt || v.altura) : '');
   document.getElementById('d-dir').textContent = dirDisplay || v.id;
   document.getElementById('r-subtitle').textContent = v.id + ' · ' + (dirDisplay || v.id);
-
-  const stepsEl = document.getElementById('d-steps');
-  stepsEl.innerHTML = '';
-  ESTADOS.forEach((s, i) => {
-    if (i > 0) {
-      const line = document.createElement('div');
-      line.className = 'step-line ' + (i <= idx ? 'done' : 'pending');
-      stepsEl.appendChild(line);
-    }
-    const step = document.createElement('div'); step.className = 'step';
-    const circle = document.createElement('div');
-    circle.className = 'step-circle ' + (i < idx ? 'done' : i === idx ? 'current' : 'pending');
-    // Cada círculo muestra SIEMPRE su pct fijo — el pct real va solo en el chip del header
-    if (i < idx) {
-      circle.textContent = '✓';
-    } else {
-      circle.textContent = s.pct !== null ? s.pct + '%' : s.icon;
-    }
-    const label = document.createElement('div'); label.className = 'step-label'; label.textContent = s.name;
-    step.appendChild(circle); step.appendChild(label); stepsEl.appendChild(step);
-  });
 
   const hist = v.historial || [];
   document.getElementById('d-historial').innerHTML = hist.slice().reverse().map(h => {
