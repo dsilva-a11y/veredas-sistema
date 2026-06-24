@@ -1599,6 +1599,11 @@ function initMapaApp() {
   setTimeout(() => { mapaAppInstance.invalidateSize(); renderMapaApp(); }, 200);
 }
 
+function enCABA(c) {
+  if (!c || c.lat == null || c.lng == null) return false;
+  return c.lat >= -34.705 && c.lat <= -34.527 && c.lng >= -58.532 && c.lng <= -58.334;
+}
+
 function renderMapaApp() {
   if (!mapaAppInstance) return;
   mapaAppMarkers.forEach(m => m.remove());
@@ -1608,11 +1613,22 @@ function renderMapaApp() {
   const nombre = user.nombre.toUpperCase().trim();
   const showAll = document.getElementById('mapaShowAll')?.checked;
   const cache = getGeoCacheApp();
+
+  // Limpiar del caché las coords fuera de CABA (datos viejos incorrectos)
+  let cacheModificado = false;
+  Object.keys(cache).forEach(id => {
+    if (!enCABA(cache[id])) {
+      delete cache[id];
+      cacheModificado = true;
+    }
+  });
+  if (cacheModificado) saveGeoCacheApp(cache);
+
   const misAcres = acres.filter(a => {
     if ((a.resp||'').toUpperCase().trim() !== nombre) return false;
     if (a.estado === 'EJECUTADO' || a.estado === 'ANULADA') return false;
     if (!showAll && (Number(a.pct||0) === 0)) return false;
-    return cache[a.id];
+    return enCABA(cache[a.id]);
   });
 
   misAcres.forEach(a => {
@@ -1636,7 +1652,7 @@ function renderMapaApp() {
 
   const sinCoords = acres.filter(a =>
     (a.resp||'').toUpperCase().trim() === nombre &&
-    a.estado !== 'EJECUTADO' && a.estado !== 'ANULADA' && !cache[a.id]
+    a.estado !== 'EJECUTADO' && a.estado !== 'ANULADA' && !enCABA(cache[a.id])
   ).length;
 
   document.getElementById('mapaSubtitleApp').textContent =
@@ -1678,7 +1694,13 @@ function openDetail(id) {
     chip.textContent = e?.name + (tieneInfo ? ' ✓' : ' — sin datos') + syncPendiente;
   } else {
     chip.className = 'chip ' + (e.chip || '');
-    chip.textContent = e.name + ' · ' + pctReal + '%' + syncPendiente;
+    // Mostrar etapa actual con su pct fijo — si el pctReal difiere, mostrarlo entre paréntesis
+    const pctEtapa = e.pct !== null ? e.pct : 0;
+    if (pctReal !== pctEtapa && pctReal > 0) {
+      chip.textContent = e.name + ' · ' + pctEtapa + '% (real: ' + pctReal + '%)' + syncPendiente;
+    } else {
+      chip.textContent = e.name + ' · ' + pctEtapa + '%' + syncPendiente;
+    }
   }
   if (v._syncPending) {
     chip.title = 'Cambio guardado localmente — pendiente de sync con el backoffice';
@@ -1705,15 +1727,17 @@ function openDetail(id) {
   const stepsEl = document.getElementById('d-steps');
   stepsEl.innerHTML = '';
   ESTADOS.forEach((s, i) => {
-    if (i > 0) { const line = document.createElement('div'); line.className = 'step-line ' + (i <= idx ? 'done' : 'pending'); stepsEl.appendChild(line); }
+    if (i > 0) {
+      const line = document.createElement('div');
+      line.className = 'step-line ' + (i <= idx ? 'done' : 'pending');
+      stepsEl.appendChild(line);
+    }
     const step = document.createElement('div'); step.className = 'step';
     const circle = document.createElement('div');
     circle.className = 'step-circle ' + (i < idx ? 'done' : i === idx ? 'current' : 'pending');
-    // Mostrar el pct REAL del frente en el círculo activo, no el pct fijo del estado
+    // Cada círculo muestra SIEMPRE su pct fijo — el pct real va solo en el chip del header
     if (i < idx) {
       circle.textContent = '✓';
-    } else if (i === idx) {
-      circle.textContent = pctReal > 0 ? pctReal + '%' : (s.pct !== null ? s.pct + '%' : s.icon);
     } else {
       circle.textContent = s.pct !== null ? s.pct + '%' : s.icon;
     }
