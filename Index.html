@@ -203,14 +203,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 <body>
 
 <!-- LOGIN OVERLAY -->
-<div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
-  <script>
-    // Ocultar inmediatamente si hay sesión guardada — evita flash del overlay
-    try {
-      const s = localStorage.getItem('bo_current_user');
-      if (s && JSON.parse(s)?.nombre) document.currentScript.parentElement.style.display='none';
-    } catch(e) {}
-  </script>
+<div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;align-items:center;justify-content:center">
   <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:32px;width:380px;max-width:95vw">
     <div style="text-align:center;margin-bottom:24px">
       <div style="font-size:32px;margin-bottom:8px">🧱</div>
@@ -219,18 +212,19 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     </div>
     <div style="margin-bottom:12px">
       <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);display:block;margin-bottom:5px">Usuario</label>
-      <input id="loginUser" class="form-input" type="text" placeholder="ej: d.silva" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+      <input id="loginUser" class="form-input" type="text" placeholder="ej: d.silva" autocomplete="off" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
     </div>
     <div style="margin-bottom:20px">
       <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);display:block;margin-bottom:5px">Contraseña</label>
-      <input id="loginPass" class="form-input" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLoginBack()">
+      <input id="loginPass" class="form-input" type="password" placeholder="••••••••" autocomplete="off" onkeydown="if(event.key==='Enter')doLoginBack()">
     </div>
-    <div id="loginError" style="display:none;color:var(--accent);font-size:12px;margin-bottom:12px;text-align:center">Usuario o contraseña incorrectos</div>
+    <div id="loginError" style="display:none;color:var(--accent);font-size:12px;margin-bottom:12px;text-align:center"></div>
     <button onclick="doLoginBack()" class="btn bp" style="width:100%;padding:11px;font-size:14px">Ingresar</button>
   </div>
 </div>
 
 
+<nav class="sidebar">
   <div class="logo">
     <div class="logo-sq">🧱</div>
     <div><div class="logo-text">VEREDAS</div><div class="logo-sub">CONSTRUMEX · PREVIAL <span style="font-size:8px;opacity:.6">v23jun-C</span></div></div>
@@ -2960,8 +2954,7 @@ function doLoginBack() {
 
   currentBoUser = found;
   localStorage.setItem('bo_current_user', JSON.stringify(found));
-  document.getElementById('loginOverlay').style.display = 'none';
-  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'none';  document.getElementById('loginError').style.display = 'none';
   // Mostrar nombre en sidebar
   const ua = document.getElementById('sidebarUserAvatar');
   const un = document.getElementById('sidebarUserName');
@@ -2988,6 +2981,7 @@ function doLogoutBack() {
   localStorage.removeItem('bo_current_user');
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').style.display = 'none';
   document.getElementById('loginOverlay').style.display = 'flex';
 }
 
@@ -3370,9 +3364,14 @@ if (savedSession) {
     if (ua) ua.textContent = currentBoUser.nombre.slice(0,2).toUpperCase();
     if (un) un.textContent = currentBoUser.nombre;
     if (ur) ur.textContent = currentBoUser.rol === 'admin' ? 'Administrador' : 'Supervisor';
-    document.getElementById('loginOverlay').style.display = 'none';
     aplicarPermisos();
-  } catch(e) { localStorage.removeItem('bo_current_user'); }
+  } catch(e) {
+    localStorage.removeItem('bo_current_user');
+    document.getElementById('loginOverlay').style.display = 'flex';
+  }
+} else {
+  // Sin sesión — mostrar login
+  document.getElementById('loginOverlay').style.display = 'flex';
 }
 async function importarJSON(input) {
   const file = input.files[0];
