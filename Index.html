@@ -202,7 +202,28 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 </head>
 <body>
 
-<nav class="sidebar">
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:32px;width:380px;max-width:95vw">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:32px;margin-bottom:8px">🧱</div>
+      <div style="font-family:var(--fh);font-size:20px;font-weight:800">VEREDAS</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">CONSTRUMEX · PREVIAL VI · Backoffice</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);display:block;margin-bottom:5px">Usuario</label>
+      <input id="loginUser" class="form-input" type="text" placeholder="ej: d.silva" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()">
+    </div>
+    <div style="margin-bottom:20px">
+      <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);display:block;margin-bottom:5px">Contraseña</label>
+      <input id="loginPass" class="form-input" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLoginBack()">
+    </div>
+    <div id="loginError" style="display:none;color:var(--accent);font-size:12px;margin-bottom:12px;text-align:center">Usuario o contraseña incorrectos</div>
+    <button onclick="doLoginBack()" class="btn bp" style="width:100%;padding:11px;font-size:14px">Ingresar</button>
+  </div>
+</div>
+
+
   <div class="logo">
     <div class="logo-sq">🧱</div>
     <div><div class="logo-text">VEREDAS</div><div class="logo-sub">CONSTRUMEX · PREVIAL <span style="font-size:8px;opacity:.6">v23jun-C</span></div></div>
@@ -226,9 +247,15 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <div class="ni" onclick="goTo('config',this)">👥 &nbsp;Responsables</div>
     <div class="ni" onclick="goTo('import',this)">📥 &nbsp;Importar Excel</div>
   </div>
-  <div class="su">
-    <div class="ua">DA</div>
-    <div><div style="font-size:12px;font-weight:500">Damián</div><div style="font-size:10px;color:var(--text3)">Supervisor</div></div>
+  <div class="su" style="flex-direction:column;gap:6px;align-items:stretch">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="ua" id="sidebarUserAvatar">—</div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:500" id="sidebarUserName">—</div>
+        <div style="font-size:10px;color:var(--text3)" id="sidebarUserRole">—</div>
+      </div>
+    </div>
+    <button onclick="doLogoutBack()" style="background:var(--bg3);border:1px solid var(--line);color:var(--text3);font-size:10px;padding:4px;border-radius:4px;cursor:pointer;width:100%">Cerrar sesión</button>
   </div>
 </nav>
 
@@ -661,7 +688,40 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         </div>
         <div class="panel"><div class="ph"><span class="pt">Responsables activos</span><span class="tag" id="respCount">0</span></div><div class="pb2" id="respList"></div></div>
 
-        <!-- PANEL ACCESO DRIVE -->
+        <!-- PANEL USUARIOS DEL BACKOFFICE -->
+        <div class="panel" style="margin-top:14px">
+          <div class="ph">
+            <span class="pt">🔐 Usuarios del backoffice</span>
+            <span id="usuariosStatus" style="font-size:11px;color:var(--text3)"></span>
+          </div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
+              Solo el <strong>Administrador</strong> puede agregar o eliminar usuarios.<br>
+              <span style="color:var(--yellow)">Supervisor</span> — acceso completo al backoffice.<br>
+              <span style="color:var(--blue)">Inspector</span> — solo la app móvil (sin acceso al backoffice).
+            </div>
+            <div id="usuariosList" style="margin-bottom:14px"></div>
+            <!-- Agregar usuario — solo visible para admin -->
+            <div id="addUserPanel" style="display:none;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:12px">
+              <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px">Agregar usuario</div>
+              <div class="r2" style="margin-bottom:8px">
+                <div><label class="form-label">Usuario</label><input class="form-input" id="newUserName" placeholder="e.rekosky" style="font-size:12px"></div>
+                <div><label class="form-label">Rol</label>
+                  <select class="form-input" id="newUserRol" style="font-size:12px">
+                    <option value="supervisor">Supervisor</option>
+                    <option value="inspector">Inspector</option>
+                  </select>
+                </div>
+              </div>
+              <div class="r2" style="margin-bottom:10px">
+                <div><label class="form-label">Contraseña</label><input class="form-input" id="newUserPass" type="password" placeholder="••••••" style="font-size:12px"></div>
+                <div><label class="form-label">Confirmar</label><input class="form-input" id="newUserPass2" type="password" placeholder="••••••" style="font-size:12px"></div>
+              </div>
+              <button class="btn bp" onclick="agregarUsuario()" style="width:100%">+ Agregar usuario</button>
+              <div id="addUserError" style="font-size:12px;color:var(--accent);margin-top:8px;display:none"></div>
+            </div>
+          </div>
+        </div>
         <div class="panel" style="margin-top:14px">
           <div class="ph">
             <span class="pt">☁ Acceso al Drive compartido</span>
@@ -1948,7 +2008,7 @@ function goTo(p,el){
   if(p==='dash') initDash();
   if(p==='mapa') initMapa();
   if(p==='lista'&&!document.getElementById('tbody').children.length) renderTable();
-  if(p==='config') { renderRespList(); listarAccesosDrive(); }
+  if(p==='config') { renderRespList(); renderUsuarios(); listarAccesosDrive(); }
   if(p==='asig') renderAsigTable();
 }
 
@@ -2857,7 +2917,140 @@ function hormCfgEliminar(tipo, idx) {
   saveHormCfg(); renderHormCfg();
 }
 
-// ─── GESTIÓN DE ACCESO AL DRIVE ──────────────────────────────────
+// ─── SISTEMA DE USUARIOS ─────────────────────────────────────────
+// Usuario actual logueado
+let currentBoUser = null; // {nombre, rol: 'admin'|'supervisor'|'inspector'}
+
+// Usuarios hardcodeados iniciales — admin siempre existe
+const DEFAULT_USERS = [
+  { nombre: 'd.silva', rol: 'admin', pass: 'construmex2024' }
+];
+
+function getBoUsers() {
+  try {
+    const saved = localStorage.getItem('bo_users');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return DEFAULT_USERS;
+}
+
+function saveBoUsers(users) {
+  localStorage.setItem('bo_users', JSON.stringify(users));
+}
+
+function doLoginBack() {
+  const user = document.getElementById('loginUser').value.trim().toLowerCase();
+  const pass = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  if (!user || !pass) { errEl.style.display='block'; errEl.textContent='Ingresá usuario y contraseña'; return; }
+
+  const users = getBoUsers();
+  const found = users.find(u => u.nombre.toLowerCase() === user && u.pass === pass);
+  if (!found) { errEl.style.display='block'; errEl.textContent='Usuario o contraseña incorrectos'; return; }
+  if (found.rol === 'inspector') { errEl.style.display='block'; errEl.textContent='Los inspectores usan la app móvil, no el backoffice'; return; }
+
+  currentBoUser = found;
+  localStorage.setItem('bo_current_user', JSON.stringify(found));
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('loginError').style.display = 'none';
+  // Mostrar nombre en sidebar
+  const ua = document.getElementById('sidebarUserAvatar');
+  const un = document.getElementById('sidebarUserName');
+  const ur = document.getElementById('sidebarUserRole');
+  if (ua) ua.textContent = found.nombre.slice(0,2).toUpperCase();
+  if (un) un.textContent = found.nombre;
+  if (ur) ur.textContent = found.rol === 'admin' ? 'Administrador' : 'Supervisor';
+  aplicarPermisos();
+  renderHome();
+}
+
+function aplicarPermisos() {
+  if (!currentBoUser) return;
+  const isAdmin = currentBoUser.rol === 'admin';
+  // El supervisor ve todo pero no puede gestionar usuarios
+  // El admin ve todo incluyendo panel de usuarios
+  const adminPanel = document.getElementById('addUserPanel');
+  if (adminPanel) adminPanel.style.display = isAdmin ? 'block' : 'none';
+}
+
+function doLogoutBack() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  currentBoUser = null;
+  localStorage.removeItem('bo_current_user');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
+
+function agregarUsuario() {
+  if (!currentBoUser || currentBoUser.rol !== 'admin') return;
+  const nombre = document.getElementById('newUserName').value.trim().toLowerCase();
+  const rol    = document.getElementById('newUserRol').value;
+  const pass   = document.getElementById('newUserPass').value;
+  const pass2  = document.getElementById('newUserPass2').value;
+  const errEl  = document.getElementById('addUserError');
+
+  if (!nombre) { errEl.style.display='block'; errEl.textContent='Ingresá un nombre de usuario'; return; }
+  if (!pass || pass.length < 4) { errEl.style.display='block'; errEl.textContent='La contraseña debe tener al menos 4 caracteres'; return; }
+  if (pass !== pass2) { errEl.style.display='block'; errEl.textContent='Las contraseñas no coinciden'; return; }
+
+  const users = getBoUsers();
+  if (users.find(u => u.nombre.toLowerCase() === nombre)) {
+    errEl.style.display='block'; errEl.textContent='Ya existe un usuario con ese nombre'; return;
+  }
+  users.push({ nombre, rol, pass });
+  saveBoUsers(users);
+  document.getElementById('newUserName').value = '';
+  document.getElementById('newUserPass').value = '';
+  document.getElementById('newUserPass2').value = '';
+  errEl.style.display = 'none';
+  renderUsuarios();
+  showToast(`✓ Usuario ${nombre} (${rol}) agregado`);
+}
+
+function eliminarUsuario(nombre) {
+  if (!currentBoUser || currentBoUser.rol !== 'admin') return;
+  if (nombre === 'd.silva') { showToast('No podés eliminar el usuario administrador'); return; }
+  if (!confirm(`¿Eliminar usuario "${nombre}"?`)) return;
+  const users = getBoUsers().filter(u => u.nombre !== nombre);
+  saveBoUsers(users);
+  renderUsuarios();
+  showToast(`Usuario ${nombre} eliminado`);
+}
+
+function cambiarPassUsuario(nombre) {
+  if (!currentBoUser || currentBoUser.rol !== 'admin') return;
+  const nueva = prompt(`Nueva contraseña para "${nombre}":`);
+  if (!nueva || nueva.length < 4) { showToast('Contraseña muy corta'); return; }
+  const users = getBoUsers();
+  const u = users.find(x => x.nombre === nombre);
+  if (u) { u.pass = nueva; saveBoUsers(users); showToast(`✓ Contraseña de ${nombre} actualizada`); }
+}
+
+function renderUsuarios() {
+  const el = document.getElementById('usuariosList');
+  if (!el) return;
+  const users = getBoUsers();
+  const isAdmin = currentBoUser?.rol === 'admin';
+  const rolColor = { admin: 'var(--accent)', supervisor: 'var(--yellow)', inspector: 'var(--blue)' };
+  const rolLabel = { admin: 'Administrador', supervisor: 'Supervisor', inspector: 'Inspector' };
+  el.innerHTML = users.map(u => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+      <div class="ua" style="background:${rolColor[u.rol]||'var(--bg4)'};width:30px;height:30px;font-size:11px;flex-shrink:0">${u.nombre.slice(0,2).toUpperCase()}</div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:600">${u.nombre}</div>
+        <div style="font-size:10px;color:${rolColor[u.rol]}">${rolLabel[u.rol]||u.rol}</div>
+      </div>
+      ${isAdmin && u.nombre !== 'd.silva' ? `
+        <button onclick="cambiarPassUsuario('${u.nombre}')" style="background:none;border:1px solid var(--line2);color:var(--text3);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">🔑</button>
+        <button onclick="eliminarUsuario('${u.nombre}')" style="background:none;border:1px solid rgba(232,80,80,.3);color:var(--red);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">✕</button>
+      ` : ''}
+    </div>`).join('');
+  const statusEl = document.getElementById('usuariosStatus');
+  if (statusEl) statusEl.textContent = `${users.length} usuario${users.length!==1?'s':''}`;
+}
+
+
 // IDs de los archivos a compartir (SYNC_UPDATES + ACRES_DATA)
 const DRIVE_SHARED_FILES = [FIXED_SYNC_FILE_ID];
 
@@ -3156,6 +3349,22 @@ async function importarPlanillaMadre(input) {
 renderTable();
 if (lastSyncTime) updateSyncBar('Último sync: ' + lastSyncTime, 'var(--text3)');
 checkOAuthCallback();
+
+// Verificar sesión guardada
+const savedSession = localStorage.getItem('bo_current_user');
+if (savedSession) {
+  try {
+    currentBoUser = JSON.parse(savedSession);
+    const ua = document.getElementById('sidebarUserAvatar');
+    const un = document.getElementById('sidebarUserName');
+    const ur = document.getElementById('sidebarUserRole');
+    if (ua) ua.textContent = currentBoUser.nombre.slice(0,2).toUpperCase();
+    if (un) un.textContent = currentBoUser.nombre;
+    if (ur) ur.textContent = currentBoUser.rol === 'admin' ? 'Administrador' : 'Supervisor';
+    document.getElementById('loginOverlay').style.display = 'none';
+    aplicarPermisos();
+  } catch(e) { localStorage.removeItem('bo_current_user'); }
+}
 async function importarJSON(input) {
   const file = input.files[0];
   if (!file) return;
