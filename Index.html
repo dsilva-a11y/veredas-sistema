@@ -220,6 +220,11 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     </div>
     <div id="loginError" style="display:none;color:var(--accent);font-size:12px;margin-bottom:12px;text-align:center"></div>
     <button onclick="doLoginBack()" class="btn bp" style="width:100%;padding:11px;font-size:14px">Ingresar</button>
+    <div style="text-align:center;margin-top:12px">
+      <button onclick="cargarUsuariosDrive()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline">
+        ¿Primera vez? Cargar usuarios desde Drive
+      </button>
+    </div>
   </div>
 </div>
 
@@ -2135,12 +2140,19 @@ function checkOAuthCallback() {
       // Limpiar la URL
       history.replaceState(null, '', window.location.pathname);
       // Cargar permisos Drive en panel Responsables
-      setTimeout(() => listarAccesosDrive(), 500);
+      setTimeout(() => { listarAccesosDrive(); loadBoUsersRemoto(); }, 500);
       // Ejecutar acción pendiente
       const action = sessionStorage.getItem('bo_pending_action');
       sessionStorage.removeItem('bo_pending_action');
       if (action === 'publish') publishToDrive();
       else if (action === 'sync') syncFromDrive();
+      else if (action === 'loadusers') {
+        // Cargar usuarios desde Drive y volver al login
+        loadBoUsersRemoto().then(() => {
+          const errEl = document.getElementById('loginError');
+          if (errEl) { errEl.style.color='var(--green)'; errEl.textContent='✓ Usuarios cargados — ingresá tus credenciales'; errEl.style.display='block'; }
+        });
+      }
     }
   }
 }
@@ -2921,41 +2933,84 @@ function hormCfgEliminar(tipo, idx) {
 }
 
 // ─── SISTEMA DE USUARIOS ─────────────────────────────────────────
-// Usuario actual logueado
-let currentBoUser = null; // {nombre, rol: 'admin'|'supervisor'|'inspector'}
-
-// Usuarios hardcodeados iniciales — admin siempre existe
-const DEFAULT_USERS = [
-  { nombre: 'd.silva', rol: 'admin', pass: 'construmex2024' }
-];
+let currentBoUser = null;
+const DEFAULT_USERS = [{ nombre: 'd.silva', rol: 'admin', pass: 'construmex2024' }];
 
 function getBoUsers() {
   try {
     const saved = localStorage.getItem('bo_users');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (!parsed.find(u => u.nombre === 'd.silva'))
+        parsed.unshift({ nombre: 'd.silva', rol: 'admin', pass: 'construmex2024' });
+      return parsed;
+    }
   } catch(e) {}
   return DEFAULT_USERS;
 }
 
 function saveBoUsers(users) {
   localStorage.setItem('bo_users', JSON.stringify(users));
+  saveBoUsersRemoto(users);
+}
+
+async function saveBoUsersRemoto(users) {
+  if (!driveToken) return;
+  try {
+    const content = JSON.stringify(users);
+    const q = `name='BO_USERS.json' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    const sd = await sr.json();
+    const existId = sd.files?.[0]?.id;
+    const meta = { name: 'BO_USERS.json', mimeType: 'application/json' };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', new Blob([content], { type: 'application/json' }));
+    const url = existId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existId}?uploadType=multipart`
+      : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+    await fetch(url, { method: existId ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + driveToken }, body: form });
+  } catch(e) { console.warn('saveBoUsersRemoto:', e.message); }
+}
+
+async function loadBoUsersRemoto() {
+  if (!driveToken) return;
+  try {
+    const q = `name='BO_USERS.json' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    const sd = await sr.json();
+    if (!sd.files?.length) return;
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    if (!r.ok) return;
+    const users = await r.json();
+    if (Array.isArray(users) && users.length) {
+      localStorage.setItem('bo_users', JSON.stringify(users));
+      renderUsuarios();
+      showToast('✓ Usuarios cargados desde Drive');
+    }
+  } catch(e) { console.warn('loadBoUsersRemoto:', e.message); }
 }
 
 function doLoginBack() {
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
   const pass = document.getElementById('loginPass').value;
   const errEl = document.getElementById('loginError');
+  errEl.style.color = 'var(--accent)';
   if (!user || !pass) { errEl.style.display='block'; errEl.textContent='Ingresá usuario y contraseña'; return; }
-
   const users = getBoUsers();
   const found = users.find(u => u.nombre.toLowerCase() === user && u.pass === pass);
   if (!found) { errEl.style.display='block'; errEl.textContent='Usuario o contraseña incorrectos'; return; }
-  if (found.rol === 'inspector') { errEl.style.display='block'; errEl.textContent='Los inspectores usan la app móvil, no el backoffice'; return; }
-
+  if (found.rol === 'inspector') { errEl.style.display='block'; errEl.textContent='Los inspectores usan la app móvil'; return; }
   currentBoUser = found;
   localStorage.setItem('bo_current_user', JSON.stringify(found));
-  document.getElementById('loginOverlay').style.display = 'none';  document.getElementById('loginError').style.display = 'none';
-  // Mostrar nombre en sidebar
+  document.getElementById('loginOverlay').style.display = 'none';
+  errEl.style.display = 'none';
   const ua = document.getElementById('sidebarUserAvatar');
   const un = document.getElementById('sidebarUserName');
   const ur = document.getElementById('sidebarUserRole');
@@ -2963,16 +3018,7 @@ function doLoginBack() {
   if (un) un.textContent = found.nombre;
   if (ur) ur.textContent = found.rol === 'admin' ? 'Administrador' : 'Supervisor';
   aplicarPermisos();
-  renderHome();
-}
-
-function aplicarPermisos() {
-  if (!currentBoUser) return;
-  const isAdmin = currentBoUser.rol === 'admin';
-  // El supervisor ve todo pero no puede gestionar usuarios
-  // El admin ve todo incluyendo panel de usuarios
-  const adminPanel = document.getElementById('addUserPanel');
-  if (adminPanel) adminPanel.style.display = isAdmin ? 'block' : 'none';
+  initParte();
 }
 
 function doLogoutBack() {
@@ -2985,6 +3031,21 @@ function doLogoutBack() {
   document.getElementById('loginOverlay').style.display = 'flex';
 }
 
+async function cargarUsuariosDrive() {
+  const errEl = document.getElementById('loginError');
+  errEl.style.display='block';
+  errEl.style.color='var(--blue)';
+  errEl.textContent='Conectando a Drive...';
+  loginDrive('loadusers');
+}
+
+function aplicarPermisos() {
+  if (!currentBoUser) return;
+  const isAdmin = currentBoUser.rol === 'admin';
+  const adminPanel = document.getElementById('addUserPanel');
+  if (adminPanel) adminPanel.style.display = isAdmin ? 'block' : 'none';
+}
+
 function agregarUsuario() {
   if (!currentBoUser || currentBoUser.rol !== 'admin') return;
   const nombre = document.getElementById('newUserName').value.trim().toLowerCase();
@@ -2992,15 +3053,11 @@ function agregarUsuario() {
   const pass   = document.getElementById('newUserPass').value;
   const pass2  = document.getElementById('newUserPass2').value;
   const errEl  = document.getElementById('addUserError');
-
   if (!nombre) { errEl.style.display='block'; errEl.textContent='Ingresá un nombre de usuario'; return; }
-  if (!pass || pass.length < 4) { errEl.style.display='block'; errEl.textContent='La contraseña debe tener al menos 4 caracteres'; return; }
+  if (!pass || pass.length < 4) { errEl.style.display='block'; errEl.textContent='Contraseña mínimo 4 caracteres'; return; }
   if (pass !== pass2) { errEl.style.display='block'; errEl.textContent='Las contraseñas no coinciden'; return; }
-
   const users = getBoUsers();
-  if (users.find(u => u.nombre.toLowerCase() === nombre)) {
-    errEl.style.display='block'; errEl.textContent='Ya existe un usuario con ese nombre'; return;
-  }
+  if (users.find(u => u.nombre.toLowerCase() === nombre)) { errEl.style.display='block'; errEl.textContent='Usuario ya existe'; return; }
   users.push({ nombre, rol, pass });
   saveBoUsers(users);
   document.getElementById('newUserName').value = '';
@@ -3013,10 +3070,9 @@ function agregarUsuario() {
 
 function eliminarUsuario(nombre) {
   if (!currentBoUser || currentBoUser.rol !== 'admin') return;
-  if (nombre === 'd.silva') { showToast('No podés eliminar el usuario administrador'); return; }
+  if (nombre === 'd.silva') { showToast('No se puede eliminar el administrador'); return; }
   if (!confirm(`¿Eliminar usuario "${nombre}"?`)) return;
-  const users = getBoUsers().filter(u => u.nombre !== nombre);
-  saveBoUsers(users);
+  saveBoUsers(getBoUsers().filter(u => u.nombre !== nombre));
   renderUsuarios();
   showToast(`Usuario ${nombre} eliminado`);
 }
@@ -3024,7 +3080,7 @@ function eliminarUsuario(nombre) {
 function cambiarPassUsuario(nombre) {
   if (!currentBoUser || currentBoUser.rol !== 'admin') return;
   const nueva = prompt(`Nueva contraseña para "${nombre}":`);
-  if (!nueva || nueva.length < 4) { showToast('Contraseña muy corta'); return; }
+  if (!nueva || nueva.length < 4) { showToast('Contraseña mínimo 4 caracteres'); return; }
   const users = getBoUsers();
   const u = users.find(x => x.nombre === nombre);
   if (u) { u.pass = nueva; saveBoUsers(users); showToast(`✓ Contraseña de ${nombre} actualizada`); }
@@ -3040,10 +3096,8 @@ function renderUsuarios() {
   el.innerHTML = users.map(u => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
       <div class="ua" style="background:${rolColor[u.rol]||'var(--bg4)'};width:30px;height:30px;font-size:11px;flex-shrink:0">${u.nombre.slice(0,2).toUpperCase()}</div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:600">${u.nombre}</div>
-        <div style="font-size:10px;color:${rolColor[u.rol]}">${rolLabel[u.rol]||u.rol}</div>
-      </div>
+      <div style="flex:1"><div style="font-size:12px;font-weight:600">${u.nombre}</div>
+        <div style="font-size:10px;color:${rolColor[u.rol]}">${rolLabel[u.rol]||u.rol}</div></div>
       ${isAdmin && u.nombre !== 'd.silva' ? `
         <button onclick="cambiarPassUsuario('${u.nombre}')" style="background:none;border:1px solid var(--line2);color:var(--text3);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">🔑</button>
         <button onclick="eliminarUsuario('${u.nombre}')" style="background:none;border:1px solid rgba(232,80,80,.3);color:var(--red);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">✕</button>
@@ -3052,10 +3106,6 @@ function renderUsuarios() {
   const statusEl = document.getElementById('usuariosStatus');
   if (statusEl) statusEl.textContent = `${users.length} usuario${users.length!==1?'s':''}`;
 }
-
-
-// IDs de los archivos a compartir (SYNC_UPDATES + ACRES_DATA)
-const DRIVE_SHARED_FILES = [FIXED_SYNC_FILE_ID];
 
 async function compartirDrive() {
   if (!driveToken) { loginDrive('sync'); return; }
