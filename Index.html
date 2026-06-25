@@ -204,6 +204,13 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 
 <!-- LOGIN OVERLAY -->
 <div id="loginOverlay" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center">
+  <script>
+    // Ocultar inmediatamente si hay sesión guardada — evita flash del overlay
+    try {
+      const s = localStorage.getItem('bo_current_user');
+      if (s && JSON.parse(s)?.nombre) document.currentScript.parentElement.style.display='none';
+    } catch(e) {}
+  </script>
   <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:32px;width:380px;max-width:95vw">
     <div style="text-align:center;margin-bottom:24px">
       <div style="font-size:32px;margin-bottom:8px">🧱</div>
@@ -247,15 +254,15 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <div class="ni" onclick="goTo('config',this)">👥 &nbsp;Responsables</div>
     <div class="ni" onclick="goTo('import',this)">📥 &nbsp;Importar Excel</div>
   </div>
-  <div class="su" style="flex-direction:column;gap:6px;align-items:stretch">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="ua" id="sidebarUserAvatar">—</div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:500" id="sidebarUserName">—</div>
-        <div style="font-size:10px;color:var(--text3)" id="sidebarUserRole">—</div>
+  <div class="su">
+    <div style="display:flex;align-items:center;gap:8px;flex:1">
+      <div class="ua" id="sidebarUserAvatar" style="width:28px;height:28px;font-size:10px;flex-shrink:0">—</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="sidebarUserName">—</div>
+        <div style="font-size:9px;color:var(--text3)" id="sidebarUserRole">—</div>
       </div>
+      <button onclick="doLogoutBack()" title="Cerrar sesión" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0">⏻</button>
     </div>
-    <button onclick="doLogoutBack()" style="background:var(--bg3);border:1px solid var(--line);color:var(--text3);font-size:10px;padding:4px;border-radius:4px;cursor:pointer;width:100%">Cerrar sesión</button>
   </div>
 </nav>
 
@@ -911,8 +918,9 @@ function monthLabel(ym){const[y,m]=ym.split('-');const mn=['Ene','Feb','Mar','Ab
 // Buscar carpeta real del frente en Drive y actualizar el link
 async function abrirCarpetaDrive(a, linkEl) {
   try {
-    // Buscar carpeta que empiece con el ID del acre en todo Drive (sin restringir a subcarpeta)
-    const q = `name contains '${a.id}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    // Buscar carpeta del ACRE dentro de 01_VEREDAS de d.silva@ (ID fijo)
+    const VEREDAS_ID = '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv';
+    const q = `name contains '${a.id}' and '${VEREDAS_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
     const r = await fetch(
       `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,webViewLink)&orderBy=name`,
       { headers: { Authorization: 'Bearer ' + driveToken } }
@@ -924,9 +932,10 @@ async function abrirCarpetaDrive(a, linkEl) {
       linkEl.textContent = '📁 Ver fotos en Drive ↗';
       linkEl.style.color = 'var(--green)';
     } else {
-      linkEl.textContent = '📁 Sin carpeta en Drive';
+      // Si no encuentra con búsqueda, generar link directo a 01_VEREDAS filtrado por nombre
+      linkEl.textContent = '📁 Ver en 01_VEREDAS ↗';
       linkEl.style.color = 'var(--text3)';
-      linkEl.href = `https://drive.google.com/drive/search?q=${encodeURIComponent(a.id)}`;
+      linkEl.href = `https://drive.google.com/drive/folders/${VEREDAS_ID}`;
       linkEl.target = '_blank';
     }
   } catch(e) {
