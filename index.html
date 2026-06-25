@@ -229,15 +229,26 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
     <div class="login-view">
       <div class="login-logo">🧱</div>
       <div class="login-title">Veredas</div>
-      <div class="login-sub">App de campo · Inspector</div>
-      <input class="login-input" type="text" id="loginNombre" placeholder="Tu nombre o iniciales (ej: ELOY)" value="">
-      <input class="login-input" type="password" id="loginClave" placeholder="Clave de acceso" value="" onkeydown="if(event.key==='Enter')doLogin()">
-      <div id="loginError" style="color:#f08a6a; font-size:12.5px; margin:-6px 0 14px; display:none;">Clave incorrecta, probá de nuevo.</div>
+      <div class="login-sub">CONSTRUMEX · PREVIAL VI</div>
+      <input class="login-input" type="text" id="loginNombre" placeholder="Usuario (ej: e.rekosky)" autocomplete="off" style="text-transform:lowercase" onkeydown="if(event.key==='Enter')document.getElementById('loginClave').focus()">
+      <input class="login-input" type="password" id="loginClave" placeholder="Contraseña" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()">
+      <div id="loginError" style="color:#f08a6a;font-size:12.5px;margin:-6px 0 14px;display:none">Usuario o contraseña incorrectos</div>
       <button class="btn-main" onclick="doLogin()">Ingresar</button>
-      <div class="login-demo">
-        <strong>Clave de equipo</strong><br>
-        Pedile la clave de acceso a tu supervisor. Cada relevamiento que cargues queda guardado y organizado junto con las fotos del acre correspondiente.
+      <button onclick="cargarUsuariosApp()" style="background:none;border:none;color:#9a9ba3;font-size:12px;cursor:pointer;margin-top:8px;text-decoration:underline">
+        ¿Primera vez? Cargar usuarios desde Drive
+      </button>
+    </div>
+  </div>
+
+  <!-- SELECTOR DE EJECUTOR (para inspectores) -->
+  <div class="view" id="view-ejecutor" style="z-index:50;background:var(--bg)">
+    <div style="padding:24px 20px;max-width:420px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:28px;margin-bottom:6px">👷</div>
+        <div style="font-family:var(--fh);font-size:18px;font-weight:800" id="inspectorNombreLabel">Inspector</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:4px">¿Qué cuadrilla vas a inspeccionar?</div>
       </div>
+      <div id="ejecutorList" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
   </div>
 
@@ -1434,21 +1445,93 @@ let selectedState = null;
 let photosCaptured = [];
 
 // Clave de acceso compartida del equipo — cambiala acá cuando quieras
-const CLAVE_ACCESO = 'CONSTRUMEX2026';
+// ─── SISTEMA DE USUARIOS APP ─────────────────────────────────────
+let appCurrentUser = null; // {nombre, rol, pass, ejecutores:[]}
+let appEjecutorActivo = null; // ejecutor seleccionado por el inspector
+
+function getAppUsers() {
+  try {
+    const saved = localStorage.getItem('bo_users'); // compartido con el back
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  // Fallback: usuarios por defecto (ejecutores como usuarios)
+  return [
+    { nombre: 'cx',    rol: 'ejecutor', pass: 'CONSTRUMEX2026', ejecutores: ['CX'] },
+    { nombre: 'eloy',  rol: 'ejecutor', pass: 'CONSTRUMEX2026', ejecutores: ['ELOY'] },
+    { nombre: 'ale',   rol: 'ejecutor', pass: 'CONSTRUMEX2026', ejecutores: ['ALE'] },
+    { nombre: 'gomez', rol: 'ejecutor', pass: 'CONSTRUMEX2026', ejecutores: ['GOMEZ'] },
+    { nombre: '4d',    rol: 'ejecutor', pass: 'CONSTRUMEX2026', ejecutores: ['4D'] },
+  ];
+}
 
 function doLogin() {
-  const clave = document.getElementById('loginClave').value.trim();
-  if (clave !== CLAVE_ACCESO) {
-    document.getElementById('loginError').style.display = 'block';
-    return;
-  }
-  document.getElementById('loginError').style.display = 'none';
+  const nombre = document.getElementById('loginNombre').value.trim().toLowerCase();
+  const pass   = document.getElementById('loginClave').value.trim();
+  const errEl  = document.getElementById('loginError');
 
-  let nombre = document.getElementById('loginNombre').value.trim().toUpperCase();
-  if (!nombre) nombre = 'INSPECTOR';
-  DB.set('usuario', { nombre, inicial: nombre.slice(0,2) });
-  if (!RESPONSABLES.includes(nombre)) { RESPONSABLES.push(nombre); DB.set('responsables', RESPONSABLES); }
-  document.getElementById('view-login').style.display = 'none';
+  if (!nombre || !pass) {
+    errEl.textContent = 'Ingresá usuario y contraseña';
+    errEl.style.display = 'block'; return;
+  }
+
+  const users = getAppUsers();
+  const found = users.find(u => u.nombre.toLowerCase() === nombre && u.pass === pass);
+
+  if (!found) {
+    // Intentar con la clave legacy CONSTRUMEX2026 para ejecutores
+    const legacy = users.find(u => u.nombre.toLowerCase() === nombre);
+    if (legacy && pass === 'CONSTRUMEX2026') {
+      doLoginSuccess(legacy); return;
+    }
+    errEl.textContent = 'Usuario o contraseña incorrectos';
+    errEl.style.display = 'block'; return;
+  }
+
+  doLoginSuccess(found);
+}
+
+function doLoginSuccess(user) {
+  appCurrentUser = user;
+  document.getElementById('loginError').style.display = 'none';
+  DB.set('appCurrentUser', user);
+
+  const rol = user.rol || 'ejecutor';
+
+  if (rol === 'inspector') {
+    // Mostrar selector de ejecutores
+    const ejecutores = user.ejecutores || [];
+    document.getElementById('inspectorNombreLabel').textContent = user.nombre.toUpperCase();
+    const list = document.getElementById('ejecutorList');
+    list.innerHTML = ejecutores.map(e => `
+      <button onclick="seleccionarEjecutor('${e}')" style="background:var(--bg2);border:1.5px solid var(--line);border-radius:10px;padding:16px 20px;text-align:left;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:12px">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${e.slice(0,2)}</div>
+        <div>
+          <div style="font-size:15px;font-weight:700">${e}</div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:2px">Ver frentes asignados</div>
+        </div>
+        <div style="margin-left:auto;color:var(--ink3);font-size:20px">›</div>
+      </button>`).join('');
+    document.getElementById('view-login').classList.remove('active');
+    document.getElementById('view-ejecutor').classList.add('active');
+  } else {
+    // Ejecutor — accede directo a sus frentes
+    const ejecutorNombre = (user.ejecutores?.[0] || user.nombre).toUpperCase();
+    appEjecutorActivo = ejecutorNombre;
+    DB.set('usuario', { nombre: ejecutorNombre, inicial: ejecutorNombre.slice(0,2) });
+    abrirAppPrincipal();
+  }
+}
+
+function seleccionarEjecutor(ejecutor) {
+  appEjecutorActivo = ejecutor;
+  DB.set('usuario', { nombre: ejecutor, inicial: ejecutor.slice(0,2) });
+  document.getElementById('view-ejecutor').classList.remove('active');
+  abrirAppPrincipal();
+}
+
+function abrirAppPrincipal() {
+  document.getElementById('view-login').classList.remove('active');
+  document.getElementById('view-ejecutor').classList.remove('active');
   document.getElementById('mainScreen').style.display = 'flex';
   renderHome();
   updateConnBanner();
@@ -1456,10 +1539,47 @@ function doLogin() {
 
 function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
+  appCurrentUser = null;
+  appEjecutorActivo = null;
+  document.getElementById('loginNombre').value = '';
   document.getElementById('loginClave').value = '';
   document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('view-login').style.display = 'flex';
+  document.getElementById('view-ejecutor').classList.remove('active');
+  document.getElementById('view-login').classList.add('active');
 }
+
+async function cargarUsuariosApp() {
+  // Conectar Drive y bajar BO_USERS.json
+  const errEl = document.getElementById('loginError');
+  errEl.style.color = '#4fa3e8';
+  errEl.style.display = 'block';
+  errEl.textContent = 'Conectando a Drive...';
+  const token = getDriveToken();
+  if (!token) { loginDrive(); return; }
+  try {
+    const q = `name='BO_USERS.json' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const sd = await sr.json();
+    if (!sd.files?.length) { errEl.textContent = 'No se encontró BO_USERS.json en Drive'; errEl.style.color='#f08a6a'; return; }
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!r.ok) { errEl.textContent = 'Error descargando usuarios'; errEl.style.color='#f08a6a'; return; }
+    const users = await r.json();
+    if (Array.isArray(users) && users.length) {
+      localStorage.setItem('bo_users', JSON.stringify(users));
+      errEl.style.color = '#3dd68c';
+      errEl.textContent = `✓ ${users.length} usuarios cargados — ingresá tus credenciales`;
+    }
+  } catch(e) {
+    errEl.style.color = '#f08a6a';
+    errEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+
 
 async function clearLocalData() {
   if (!confirm('Esto borra todos los acres, relevamientos y fotos guardadas en este celular. ¿Continuar?')) return;
