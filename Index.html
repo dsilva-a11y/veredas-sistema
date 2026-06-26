@@ -3124,32 +3124,81 @@ function renderUsuarios() {
   const rolColor = { admin: 'var(--accent)', supervisor: 'var(--yellow)', inspector: 'var(--blue)' };
   const rolLabel = { admin: 'Administrador', supervisor: 'Supervisor', inspector: 'Inspector' };
   el.innerHTML = users.map(u => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
       <div class="ua" style="background:${rolColor[u.rol]||'var(--bg4)'};width:30px;height:30px;font-size:11px;flex-shrink:0">${u.nombre.slice(0,2).toUpperCase()}</div>
-      <div style="flex:1"><div style="font-size:12px;font-weight:600">${u.nombre}</div>
-        <div style="font-size:10px;color:${rolColor[u.rol]}">${rolLabel[u.rol]||u.rol}${u.ejecutores?.length ? ' · ' + u.ejecutores.join(', ') : ''}</div></div>
+      <div style="flex:1;min-width:120px">
+        <div style="font-size:12px;font-weight:600">${u.nombre}</div>
+        <div style="font-size:10px;color:${rolColor[u.rol]}">${rolLabel[u.rol]||u.rol}${u.ejecutores?.length ? ' · ' + u.ejecutores.join(', ') : ''}</div>
+      </div>
       ${isAdmin && u.nombre !== 'd.silva' ? `
+        ${u.rol === 'inspector' ? `<button onclick="editarEjecutores('${u.nombre}')" style="background:none;border:1px solid var(--blue);color:var(--blue);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">✏ Cuadrillas</button>` : ''}
         <button onclick="cambiarPassUsuario('${u.nombre}')" style="background:none;border:1px solid var(--line2);color:var(--text3);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">🔑</button>
         <button onclick="eliminarUsuario('${u.nombre}')" style="background:none;border:1px solid rgba(232,80,80,.3);color:var(--red);font-size:10px;padding:3px 7px;border-radius:4px;cursor:pointer">✕</button>
       ` : ''}
+    </div>
+    <div id="editEjec_${u.nombre}" style="display:none;background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:6px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">Cuadrillas que puede inspeccionar — ${u.nombre}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        ${(RESPS||[]).map(r => {
+          const nombre = typeof r === 'string' ? r : (r.nombre||r.id||r);
+          const checked = (u.ejecutores||[]).includes(nombre);
+          return `<label style="display:flex;align-items:center;gap:4px;background:var(--bg4);border:1px solid var(--line);border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px">
+            <input type="checkbox" value="${nombre}" ${checked?'checked':''} style="accent-color:var(--accent)"> ${nombre}
+          </label>`;
+        }).join('')}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="guardarEjecutores('${u.nombre}')" class="btn bp" style="font-size:11px;padding:5px 12px">✓ Guardar</button>
+        <button onclick="document.getElementById('editEjec_${u.nombre}').style.display='none'" style="background:none;border:1px solid var(--line);color:var(--text3);font-size:11px;padding:5px 12px;border-radius:4px;cursor:pointer">Cancelar</button>
+      </div>
     </div>`).join('');
   const statusEl = document.getElementById('usuariosStatus');
   if (statusEl) statusEl.textContent = `${users.length} usuario${users.length!==1?'s':''}`;
 }
 
+function editarEjecutores(nombre) {
+  // Cerrar otros paneles abiertos
+  document.querySelectorAll('[id^="editEjec_"]').forEach(el => el.style.display = 'none');
+  const panel = document.getElementById(`editEjec_${nombre}`);
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function guardarEjecutores(nombre) {
+  const panel = document.getElementById(`editEjec_${nombre}`);
+  if (!panel) return;
+  const checks = panel.querySelectorAll('input[type=checkbox]:checked');
+  const ejecutores = [...checks].map(c => c.value);
+  if (!ejecutores.length) { showToast('Seleccioná al menos un ejecutor'); return; }
+  const users = getBoUsers();
+  const u = users.find(x => x.nombre === nombre);
+  if (u) {
+    u.ejecutores = ejecutores;
+    saveBoUsers(users);
+    renderUsuarios();
+    showToast(`✓ Cuadrillas de ${nombre} actualizadas`);
+  }
+}
+
 async function compartirDrive() {
   if (!driveToken) { loginDrive('sync'); return; }
   const email = document.getElementById('driveShareEmail').value.trim();
+  const resEl = document.getElementById('driveShareResult');
   if (!email || !email.includes('@')) {
-    document.getElementById('driveShareResult').innerHTML = '<span style="color:var(--accent)">⚠ Ingresá un email válido</span>';
+    resEl.innerHTML = '<span style="color:var(--accent)">⚠ Ingresá un email válido</span>';
     return;
   }
-  document.getElementById('driveShareResult').innerHTML = '<span style="color:var(--yellow)">⏳ Dando acceso...</span>';
+  resEl.innerHTML = '<span style="color:var(--yellow)">⏳ Dando acceso...</span>';
 
-  // Buscar también ACRES_DATA.json para compartirlo
-  const archivosIds = [...DRIVE_SHARED_FILES];
+  // IDs fijos de los archivos a compartir
+  const archivosIds = [
+    '1YuC6L-G340iHYdkfDAli5gKxZZroOekT', // SYNC_UPDATES.json
+    '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h',  // ACRES_DATA.json
+    '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv',  // carpeta 01_VEREDAS
+  ];
+
+  // Intentar también dar acceso al BO_USERS.json si existe
   try {
-    const q = `name='ACRES_DATA.json' and trashed=false`;
+    const q = `name='BO_USERS.json' and trashed=false`;
     const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
       headers: { Authorization: 'Bearer ' + driveToken }
     });
@@ -3157,27 +3206,36 @@ async function compartirDrive() {
     if (d.files?.[0]?.id && !archivosIds.includes(d.files[0].id)) archivosIds.push(d.files[0].id);
   } catch(e) {}
 
-  let ok = 0; let errors = [];
+  let ok = 0; const errors = [];
   for (const fileId of archivosIds) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + driveToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email })
+        body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email }),
+        signal: controller.signal
       });
+      clearTimeout(timeout);
       if (res.ok) ok++;
-      else { const err = await res.json(); errors.push(err.error?.message || 'Error'); }
-    } catch(e) { errors.push(e.message); }
+      else {
+        const err = await res.json();
+        // Ignorar error de permiso ya existente
+        if (!err.error?.message?.includes('already')) errors.push(err.error?.message || 'Error');
+        else ok++;
+      }
+    } catch(e) {
+      if (e.name !== 'AbortError') errors.push(e.message);
+    }
   }
 
-  if (errors.length === 0) {
-    document.getElementById('driveShareResult').innerHTML =
-      `<span style="color:var(--green)">✓ Acceso otorgado a <strong>${email}</strong> (${ok} archivo${ok>1?'s':''})</span>`;
+  if (ok > 0) {
+    resEl.innerHTML = `<span style="color:var(--green)">✓ Acceso otorgado a <strong>${email}</strong></span>`;
     document.getElementById('driveShareEmail').value = '';
     listarAccesosDrive();
   } else {
-    document.getElementById('driveShareResult').innerHTML =
-      `<span style="color:var(--accent)">❌ ${errors[0]}<br><small>¿El archivo está en tu Drive? Verificá que SYNC_UPDATES.json exista.</small></span>`;
+    resEl.innerHTML = `<span style="color:var(--accent)">❌ ${errors[0] || 'Error desconocido'}<br><small>Verificá que estés conectado a Drive con d.silva@</small></span>`;
   }
 }
 
