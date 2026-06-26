@@ -3009,7 +3009,7 @@ function doLoginBack() {
   errEl.style.color = 'var(--accent)';
   if (!user || !pass) { errEl.style.display='block'; errEl.textContent='Ingresá usuario y contraseña'; return; }
   const users = getBoUsers();
-  const found = users.find(u => u.nombre.toLowerCase() === user && u.pass === pass);
+  const found = users.find(u => u.nombre.toLowerCase() === user && u.pass === pass.trim());
   if (!found) { errEl.style.display='block'; errEl.textContent='Usuario o contraseña incorrectos'; return; }
   if (found.rol === 'inspector') { errEl.style.display='block'; errEl.textContent='Los inspectores usan la app móvil'; return; }
   currentBoUser = found;

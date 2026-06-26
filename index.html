@@ -241,14 +241,15 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
   </div>
 
   <!-- SELECTOR DE EJECUTOR (para inspectores) -->
-  <div class="view" id="view-ejecutor" style="z-index:50;background:var(--bg)">
-    <div style="padding:24px 20px;max-width:420px;margin:0 auto">
-      <div style="text-align:center;margin-bottom:24px">
-        <div style="font-size:28px;margin-bottom:6px">👷</div>
-        <div style="font-family:var(--fh);font-size:18px;font-weight:800" id="inspectorNombreLabel">Inspector</div>
-        <div style="font-size:12px;color:var(--ink3);margin-top:4px">¿Qué cuadrilla vas a inspeccionar?</div>
+  <div class="view" id="view-ejecutor" style="z-index:50;background:#f5f5f0;min-height:100vh">
+    <div style="padding:32px 20px;max-width:420px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:28px">
+        <div style="font-size:36px;margin-bottom:8px">👷</div>
+        <div style="font-family:system-ui,sans-serif;font-size:20px;font-weight:800;color:#111" id="inspectorNombreLabel">Inspector</div>
+        <div style="font-size:13px;color:#888;margin-top:4px">¿Qué cuadrilla vas a inspeccionar?</div>
       </div>
       <div id="ejecutorList" style="display:flex;flex-direction:column;gap:10px"></div>
+      <button onclick="doLogout()" style="margin-top:24px;width:100%;background:none;border:1px solid #ddd;border-radius:8px;padding:10px;color:#999;font-size:12px;cursor:pointer">Cerrar sesión</button>
     </div>
   </div>
 
@@ -1498,19 +1499,29 @@ function doLoginSuccess(user) {
   const rol = user.rol || 'ejecutor';
 
   if (rol === 'inspector') {
-    // Mostrar selector de ejecutores
-    const ejecutores = user.ejecutores || [];
+    // Obtener ejecutores asignados — si viene vacío usar todos los responsables conocidos
+    let ejecutores = user.ejecutores || [];
+    if (!ejecutores.length) {
+      // Fallback: usar los responsables del sistema
+      ejecutores = RESPONSABLES.filter(r => r && r !== 'RELEVAR');
+    }
+    if (!ejecutores.length) ejecutores = ['CX','ELOY','ALE','GOMEZ','4D'];
+
     document.getElementById('inspectorNombreLabel').textContent = user.nombre.toUpperCase();
     const list = document.getElementById('ejecutorList');
-    list.innerHTML = ejecutores.map(e => `
-      <button onclick="seleccionarEjecutor('${e}')" style="background:var(--bg2);border:1.5px solid var(--line);border-radius:10px;padding:16px 20px;text-align:left;cursor:pointer;color:var(--ink);display:flex;align-items:center;gap:12px">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${e.slice(0,2)}</div>
-        <div>
-          <div style="font-size:15px;font-weight:700">${e}</div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:2px">Ver frentes asignados</div>
+    const colors = {'CX':'#e8623a','ELOY':'#3dd68c','ALE':'#4fa3e8','GOMEZ':'#f0c050','4D':'#a978e8','KEVIN':'#e85050','EDU':'#64b5f6','RONALD':'#f0956d','MATNA':'#a5d6a7','HUMA':'#ff8a65'};
+    list.innerHTML = ejecutores.map(e => {
+      const color = colors[e] || '#888';
+      return `<button onclick="seleccionarEjecutor('${e}')" style="background:#fff;border:1.5px solid #e0e0e0;border-radius:12px;padding:16px 18px;text-align:left;cursor:pointer;color:#111;display:flex;align-items:center;gap:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+        <div style="width:44px;height:44px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0">${e.slice(0,2)}</div>
+        <div style="flex:1">
+          <div style="font-size:16px;font-weight:700">${e}</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">Ver frentes asignados</div>
         </div>
-        <div style="margin-left:auto;color:var(--ink3);font-size:20px">›</div>
-      </button>`).join('');
+        <div style="color:#bbb;font-size:22px">›</div>
+      </button>`;
+    }).join('');
+
     document.getElementById('view-login').classList.remove('active');
     document.getElementById('view-ejecutor').classList.add('active');
   } else {
