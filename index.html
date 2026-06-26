@@ -1580,29 +1580,51 @@ function doLogout() {
 }
 
 async function cargarUsuariosApp() {
-  // Conectar Drive y bajar BO_USERS.json
   const errEl = document.getElementById('loginError');
   errEl.style.color = '#4fa3e8';
   errEl.style.display = 'block';
   errEl.textContent = 'Conectando a Drive...';
-  const token = getDriveToken();
-  if (!token) { loginDrive(); return; }
+
   try {
+    // Conectar Drive usando el flujo correcto de la app (GIS)
+    let token = getDriveToken();
+    if (!token) {
+      token = await conectarDrive();
+    }
+    if (!token) {
+      errEl.style.color = '#f08a6a';
+      errEl.textContent = 'No se pudo conectar a Drive';
+      return;
+    }
+
+    errEl.textContent = 'Buscando usuarios...';
+
     const q = `name='BO_USERS.json' and trashed=false`;
     const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
       headers: { Authorization: 'Bearer ' + token }
     });
     const sd = await sr.json();
-    if (!sd.files?.length) { errEl.textContent = 'No se encontró BO_USERS.json en Drive'; errEl.style.color='#f08a6a'; return; }
+    if (!sd.files?.length) {
+      errEl.style.color = '#f08a6a';
+      errEl.textContent = 'No se encontró BO_USERS.json en Drive';
+      return;
+    }
     const r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
       headers: { Authorization: 'Bearer ' + token }
     });
-    if (!r.ok) { errEl.textContent = 'Error descargando usuarios'; errEl.style.color='#f08a6a'; return; }
+    if (!r.ok) {
+      errEl.style.color = '#f08a6a';
+      errEl.textContent = 'Error descargando usuarios';
+      return;
+    }
     const users = await r.json();
     if (Array.isArray(users) && users.length) {
       localStorage.setItem('bo_users', JSON.stringify(users));
-      errEl.style.color = '#3dd68c';
+      errEl.style.color = '#1e8c5a';
       errEl.textContent = `✓ ${users.length} usuarios cargados — ingresá tus credenciales`;
+    } else {
+      errEl.style.color = '#f08a6a';
+      errEl.textContent = 'El archivo de usuarios está vacío';
     }
   } catch(e) {
     errEl.style.color = '#f08a6a';
