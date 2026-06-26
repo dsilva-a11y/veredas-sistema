@@ -252,6 +252,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <div class="ni" onclick="goTo('asig',this)">📋 &nbsp;Asignación &nbsp;<span class="nb" id="nb-sin-asig">0</span></div>
     <div class="ni" onclick="goTo('config',this)">👥 &nbsp;Responsables</div>
     <div class="ni" onclick="goTo('import',this)">📥 &nbsp;Importar Excel</div>
+    <div class="ni" onclick="window.open('https://dsilva-a11y.github.io/veredas-sistema/index.html','_blank')">📱 &nbsp;App móvil ↗</div>
   </div>
   <div class="su">
     <div style="display:flex;align-items:center;gap:8px;flex:1">
@@ -2254,24 +2255,22 @@ function mergeAcresData(updates) {
   for (const u of updates) {
     if (idx[u.id] !== undefined) {
       const a = ALL[idx[u.id]];
-      // Resolución por timestamp: gana el cambio más reciente
-      // Si el frente en memoria fue editado por el backoffice (_editado=true),
-      // solo lo pisa si el dato de Drive es más nuevo que lo que está en memoria
       const tsMemoria = a._updated ? new Date(a._updated).getTime() : 0;
       const tsDrive   = u._updated ? new Date(u._updated).getTime() : 0;
-      if (a._editado && tsMemoria >= tsDrive) {
-        // El backoffice tiene dato más reciente o igual — no pisar
+      // Solo bloquear si ESTE backoffice editó el frente Y su ts es más nuevo que Drive
+      // Si otro supervisor editó (tsDrive > tsMemoria), Drive siempre gana
+      if (a._editado && tsMemoria > tsDrive) {
         count++;
         continue;
       }
       CAMPOS.forEach(f => { if (u[f] !== undefined) a[f] = u[f]; });
       if (u.pct !== undefined) a.pct = Number(u.pct);
       if (u._updated !== undefined) a._updated = u._updated;
-      // Si Drive ganó, limpiar el flag _editado para no bloquear futuros syncs
       a._editado = false;
       count++;
     }
   }
+  saveData();
   return count;
 }
 
@@ -3263,7 +3262,7 @@ async function listarAccesosDrive() {
           <div style="font-size:12px;font-weight:600;color:var(--text)">${p.displayName||''}</div>
           <div style="font-size:11px;color:var(--text3)">${p.emailAddress} · ${p.role==='writer'?'Editor':'Lector'}</div>
         </div>
-        <button onclick="revocarAccesoDrive('${p.id}','${p.emailAddress}')" style="background:none;border:1px solid rgba(232,80,80,.3);color:var(--red);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer">Revocar</button>
+        <button onclick="revocarAccesoDrive('${p.id}','${p.emailAddress}')" style="background:none;border:1px solid rgba(232,80,80,.3);color:var(--red);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;${currentBoUser?.rol!=='admin'?'visibility:hidden':''}">Revocar</button>
       </div>`).join('');
   } catch(e) {
     el.innerHTML = `<span style="color:var(--text3)">Error: ${e.message}</span>`;
@@ -3271,6 +3270,7 @@ async function listarAccesosDrive() {
 }
 
 async function revocarAccesoDrive(permId, email) {
+  if (currentBoUser?.rol !== 'admin') { showToast('Solo el administrador puede revocar accesos'); return; }
   if (!confirm(`¿Revocar acceso de ${email}?`)) return;
   try {
     await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_SYNC_FILE_ID}/permissions/${permId}`, {

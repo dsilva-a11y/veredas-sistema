@@ -1552,18 +1552,25 @@ function doLoginSuccess(user) {
 function seleccionarEjecutor(ejecutor) {
   appEjecutorActivo = ejecutor;
   DB.set('usuario', { nombre: ejecutor, inicial: ejecutor.slice(0,2) });
-  document.getElementById('view-ejecutor').classList.remove('active');
+  const ve = document.getElementById('view-ejecutor');
+  ve.classList.remove('active');
+  ve.classList.add('hidden-right');
   abrirAppPrincipal();
 }
 
 function abrirAppPrincipal() {
-  document.getElementById('view-login').classList.remove('active');
-  const ve = document.getElementById('view-ejecutor');
-  ve.classList.remove('active');
-  ve.classList.add('hidden-right');
-  document.getElementById('mainScreen').style.display = 'flex';
-  renderHome();
-  updateConnBanner();
+  try {
+    document.getElementById('view-login').classList.remove('active');
+    const ve = document.getElementById('view-ejecutor');
+    if (ve) { ve.classList.remove('active'); ve.classList.add('hidden-right'); }
+    const ms = document.getElementById('mainScreen');
+    if (ms) ms.style.display = 'flex';
+    renderHome();
+    updateConnBanner();
+  } catch(e) {
+    console.error('abrirAppPrincipal error:', e);
+    alert('Error al abrir la app: ' + e.message);
+  }
 }
 
 function doLogout() {
