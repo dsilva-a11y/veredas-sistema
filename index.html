@@ -1445,8 +1445,7 @@ const ve = document.getElementById('view-ejecutor');
 ve.classList.remove('active');
 ve.classList.add('hidden-right');
 document.getElementById('mainScreen').style.display = 'none';
-const allViews = document.querySelectorAll('.view');
-allViews.forEach(v => { if(v.id !== 'view-login') { v.classList.remove('active'); v.classList.add('hidden-right'); } });
+// Solo limpiar views que están FUERA del mainScreen (login y ejecutor)
 document.getElementById('view-login').classList.remove('hidden-right');
 document.getElementById('view-login').classList.add('active');
 
@@ -1565,6 +1564,9 @@ function abrirAppPrincipal() {
     if (ve) { ve.classList.remove('active'); ve.classList.add('hidden-right'); }
     const ms = document.getElementById('mainScreen');
     if (ms) ms.style.display = 'flex';
+    // Asegurar que view-home esté activo dentro del mainScreen
+    const vh = document.getElementById('view-home');
+    if (vh) { vh.classList.remove('hidden-right'); vh.classList.add('active'); }
     renderHome();
     updateConnBanner();
   } catch(e) {
