@@ -241,7 +241,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
   </div>
 
   <!-- SELECTOR DE EJECUTOR (para inspectores) -->
-  <div class="view" id="view-ejecutor" style="z-index:50;background:#f5f5f0;min-height:100vh">
+  <div class="view hidden-right" id="view-ejecutor" style="z-index:50;background:#f5f5f0;min-height:100vh">
     <div style="padding:32px 20px;max-width:420px;margin:0 auto">
       <div style="text-align:center;margin-bottom:28px">
         <div style="font-size:36px;margin-bottom:8px">👷</div>
@@ -1440,6 +1440,17 @@ function seedInicial() {
 seedInicial();
 RESPONSABLES = DB.get('responsables', RESPONSABLES);
 
+// Al iniciar: siempre mostrar login, nunca quedarse en pantalla de ejecutores
+const ve = document.getElementById('view-ejecutor');
+ve.classList.remove('active');
+ve.classList.add('hidden-right');
+document.getElementById('mainScreen').style.display = 'none';
+const allViews = document.querySelectorAll('.view');
+allViews.forEach(v => { if(v.id !== 'view-login') { v.classList.remove('active'); v.classList.add('hidden-right'); } });
+document.getElementById('view-login').classList.remove('hidden-right');
+document.getElementById('view-login').classList.add('active');
+
+
 let currentId = null;
 let currentAcre = null;
 let selectedState = null;
@@ -1502,10 +1513,13 @@ function doLoginSuccess(user) {
     // Obtener ejecutores asignados — si viene vacío usar todos los responsables conocidos
     let ejecutores = user.ejecutores || [];
     if (!ejecutores.length) {
-      // Fallback: usar los responsables del sistema
-      ejecutores = RESPONSABLES.filter(r => r && r !== 'RELEVAR');
+      // Fallback 1: usar responsables del sistema local
+      ejecutores = (RESPONSABLES || []).filter(r => r && r !== 'RELEVAR' && r.length > 0);
     }
-    if (!ejecutores.length) ejecutores = ['CX','ELOY','ALE','GOMEZ','4D'];
+    if (!ejecutores.length) {
+      // Fallback 2: ejecutores fijos del sistema
+      ejecutores = ['CX','ELOY','ALE','GOMEZ','4D'];
+    }
 
     document.getElementById('inspectorNombreLabel').textContent = user.nombre.toUpperCase();
     const list = document.getElementById('ejecutorList');
@@ -1523,7 +1537,9 @@ function doLoginSuccess(user) {
     }).join('');
 
     document.getElementById('view-login').classList.remove('active');
-    document.getElementById('view-ejecutor').classList.add('active');
+    const ve = document.getElementById('view-ejecutor');
+    ve.classList.remove('hidden-right');
+    ve.classList.add('active');
   } else {
     // Ejecutor — accede directo a sus frentes
     const ejecutorNombre = (user.ejecutores?.[0] || user.nombre).toUpperCase();
@@ -1542,7 +1558,9 @@ function seleccionarEjecutor(ejecutor) {
 
 function abrirAppPrincipal() {
   document.getElementById('view-login').classList.remove('active');
-  document.getElementById('view-ejecutor').classList.remove('active');
+  const ve = document.getElementById('view-ejecutor');
+  ve.classList.remove('active');
+  ve.classList.add('hidden-right');
   document.getElementById('mainScreen').style.display = 'flex';
   renderHome();
   updateConnBanner();
@@ -1555,7 +1573,9 @@ function doLogout() {
   document.getElementById('loginNombre').value = '';
   document.getElementById('loginClave').value = '';
   document.getElementById('mainScreen').style.display = 'none';
-  document.getElementById('view-ejecutor').classList.remove('active');
+  const ve = document.getElementById('view-ejecutor');
+  ve.classList.remove('active');
+  ve.classList.add('hidden-right');
   document.getElementById('view-login').classList.add('active');
 }
 
