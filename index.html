@@ -1559,14 +1559,15 @@ function seleccionarEjecutor(ejecutor) {
 
 function abrirAppPrincipal() {
   try {
+    // Ocultar pantallas de login/selector
     document.getElementById('view-login').classList.remove('active');
+    document.getElementById('view-login').classList.add('hidden-right');
     const ve = document.getElementById('view-ejecutor');
     if (ve) { ve.classList.remove('active'); ve.classList.add('hidden-right'); }
-    const ms = document.getElementById('mainScreen');
-    if (ms) ms.style.display = 'flex';
-    // Asegurar que view-home esté activo dentro del mainScreen
-    const vh = document.getElementById('view-home');
-    if (vh) { vh.classList.remove('hidden-right'); vh.classList.add('active'); }
+    // Mostrar mainScreen
+    document.getElementById('mainScreen').style.display = 'flex';
+    // Activar view-home dentro del mainScreen
+    switchTo('home');
     renderHome();
     updateConnBanner();
   } catch(e) {
@@ -1753,9 +1754,15 @@ function findTab(name) {
 
 const viewStack = ['home'];
 function switchTo(id) {
-  document.querySelectorAll('.view').forEach(v => { v.classList.remove('active','hidden-right'); v.classList.add('hidden-right'); });
+  // Solo manejar views DENTRO del mainScreen (excluir login y ejecutor)
+  const excluded = ['view-login', 'view-ejecutor'];
+  document.querySelectorAll('.view').forEach(v => {
+    if (excluded.includes(v.id)) return;
+    v.classList.remove('active','hidden-right');
+    v.classList.add('hidden-right');
+  });
   const el = document.getElementById('view-' + id);
-  el.classList.remove('hidden-right'); el.classList.add('active');
+  if (el) { el.classList.remove('hidden-right'); el.classList.add('active'); }
 }
 function navigate(id) { viewStack.push(id); switchTo(id); }
 function goBack(id) { viewStack.pop(); switchTo(id || viewStack[viewStack.length-1] || 'home'); }
