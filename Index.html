@@ -1341,11 +1341,11 @@ function renderParte(){
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed">
       <colgroup>
-        <col style="width:75px">
-        <col style="width:auto">
-        <col style="width:52px">
-        <col style="width:72px">
+        <col style="width:68px">
+        <col style="width:210px">
         <col style="width:48px">
+        <col style="width:68px">
+        <col style="width:44px">
       </colgroup>
       <thead><tr style="background:#555;color:#fff">
         <th style="padding:4px 6px;border:1px solid #999;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">RESP.</th>
@@ -3054,7 +3054,7 @@ function doLoginBack() {
   if (!found) { errEl.style.display='block'; errEl.textContent='Usuario o contraseña incorrectos'; return; }
   if (found.rol === 'inspector') { errEl.style.display='block'; errEl.textContent='Los inspectores usan la app móvil'; return; }
   currentBoUser = found;
-  localStorage.setItem('bo_current_user', JSON.stringify(found));
+  sessionStorage.setItem('bo_current_user', JSON.stringify(found));
   document.getElementById('loginOverlay').style.display = 'none';
   errEl.style.display = 'none';
   const ua = document.getElementById('sidebarUserAvatar');
@@ -3070,7 +3070,7 @@ function doLoginBack() {
 function doLogoutBack() {
   if (!confirm('¿Cerrar sesión?')) return;
   currentBoUser = null;
-  localStorage.removeItem('bo_current_user');
+  sessionStorage.removeItem('bo_current_user');
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   document.getElementById('loginError').style.display = 'none';
@@ -3534,7 +3534,9 @@ if (lastSyncTime) updateSyncBar('Último sync: ' + lastSyncTime, 'var(--text3)')
 checkOAuthCallback();
 
 // Verificar sesión guardada
-const savedSession = localStorage.getItem('bo_current_user');
+// Limpiar sesión vieja de localStorage si existe (migración a sessionStorage)
+localStorage.removeItem('bo_current_user');
+const savedSession = sessionStorage.getItem('bo_current_user');
 if (savedSession) {
   try {
     currentBoUser = JSON.parse(savedSession);
@@ -3546,7 +3548,7 @@ if (savedSession) {
     if (ur) ur.textContent = currentBoUser.rol === 'admin' ? 'Administrador' : 'Supervisor';
     aplicarPermisos();
   } catch(e) {
-    localStorage.removeItem('bo_current_user');
+    sessionStorage.removeItem('bo_current_user');
     document.getElementById('loginOverlay').style.display = 'flex';
   }
 } else {
