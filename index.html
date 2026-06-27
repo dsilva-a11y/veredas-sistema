@@ -379,6 +379,7 @@ html, body { font-family: var(--font); background: var(--ink); height: 100%; ove
         <div class="menu-item"><span class="menu-icon">💾</span><span class="menu-label">Espacio usado</span><span class="menu-val" id="profileStorageUsed">0 MB</span><span class="menu-arrow">›</span></div>
         <div class="menu-item"><span class="menu-icon">📡</span><span class="menu-label">Google Drive</span><span class="menu-val" id="profileServerStatus">No conectado</span><span class="menu-arrow">›</span></div>
         <div class="menu-item" onclick="clearLocalData()"><span class="menu-icon" style="color:var(--red)">🗑️</span><span class="menu-label" style="color:var(--red)">Borrar datos locales</span></div>
+        <div id="btnCambiarEjecutor" class="menu-item" onclick="volverASelectorEjecutor()" style="display:none"><span class="menu-icon">👷</span><span class="menu-label">Cambiar cuadrilla</span><span class="menu-arrow">›</span></div>
         <div class="menu-item" onclick="doLogout()"><span class="menu-icon" style="color:var(--red)">🚪</span><span class="menu-label" style="color:var(--red)">Cerrar sesión</span></div>
       </div>
       <nav class="nav-bar">
@@ -1154,32 +1155,47 @@ window.addEventListener('load', () => {
   if (getDriveToken()) {
     updateConnBanner();
     // Leer asignaciones del backoffice automáticamente
+    // Actualizar base completa al conectar Drive (para todos los ejecutores)
     setTimeout(() => leerAsignacionesDrive(), 500);
   }
 });
 
 // Bajar la base completa de frentes desde ACRES_DATA.json
-async function cargarBaseCompletaDrive(token) {
-  // ID fijo de ACRES_DATA.json en Drive de d.silva@construmex.com.ar
+async function cargarBaseCompletaDrive(token, forzar=false) {
   const FIXED_ACRES_ID = '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h';
   try {
+    // Verificar si hay versión más nueva en Drive
+    const meta = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_ID}?fields=modifiedTime`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!meta.ok && !forzar) return;
+    
+    const acresLocales = DB.get('acres', []);
+    const ultimaSync = localStorage.getItem('acres_last_sync') || '0';
+    
+    if (!forzar && acresLocales.length > 3) {
+      // Solo bajar si hay versión más nueva en Drive
+      if (meta.ok) {
+        const metaData = await meta.json();
+        const driveTs = new Date(metaData.modifiedTime).getTime();
+        const localTs = new Date(ultimaSync).getTime();
+        if (driveTs <= localTs) return; // ya tenemos la versión más reciente
+      } else return;
+    }
+
     syncLog('Bajando base completa de frentes...', '#4fa3e8');
     let r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_ID}?alt=media`, {
       headers: { Authorization: 'Bearer ' + token }
     });
-    // Fallback: buscar por nombre si el ID fijo no es accesible
     if (!r.ok) {
+      // Fallback por nombre
       const q = `name='ACRES_DATA.json' and trashed=false`;
-      const sr = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime+desc`,
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
+      const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)&orderBy=modifiedTime+desc`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
       if (!sr.ok) return;
       const sd = await sr.json();
-      if (!sd.files?.length) {
-        syncLog('Sin ACRES_DATA.json en Drive — usá Publicar base en el backoffice', '#f0c050');
-        return;
-      }
+      if (!sd.files?.length) { syncLog('Sin ACRES_DATA.json en Drive', '#f0c050'); return; }
       r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
         headers: { Authorization: 'Bearer ' + token }
       });
@@ -1188,8 +1204,9 @@ async function cargarBaseCompletaDrive(token) {
     const data = await r.json();
     if (!Array.isArray(data) || data.length === 0) return;
     DB.set('acres', data);
-    syncLog(`✓ Base cargada: ${data.length} frentes`, '#3dd68c');
-    showToast(`✓ Base cargada — ${data.length} frentes`);
+    localStorage.setItem('acres_last_sync', new Date().toISOString());
+    syncLog(`✓ Base actualizada: ${data.length} frentes`, '#3dd68c');
+    showToast(`✓ Base actualizada — ${data.length} frentes`);
   } catch(e) {
     syncLog('Error cargando base: ' + e.message, '#ff5252');
   }
@@ -1559,17 +1576,25 @@ function seleccionarEjecutor(ejecutor) {
 
 function abrirAppPrincipal() {
   try {
-    // Ocultar pantallas de login/selector
     document.getElementById('view-login').classList.remove('active');
     document.getElementById('view-login').classList.add('hidden-right');
     const ve = document.getElementById('view-ejecutor');
     if (ve) { ve.classList.remove('active'); ve.classList.add('hidden-right'); }
-    // Mostrar mainScreen
     document.getElementById('mainScreen').style.display = 'flex';
-    // Activar view-home dentro del mainScreen
     switchTo('home');
     renderHome();
     updateConnBanner();
+    // Auto-actualizar asignaciones al entrar si Drive está conectado
+    const token = getDriveToken();
+    if (token) {
+      setTimeout(async () => {
+        syncLog('Auto-actualizando asignaciones...', '#4fa3e8');
+        await cargarBaseCompletaDrive(token);
+        await leerAsignacionesDrive();
+        renderHome();
+        showToast('✓ Asignaciones actualizadas');
+      }, 800);
+    }
   } catch(e) {
     console.error('abrirAppPrincipal error:', e);
     alert('Error al abrir la app: ' + e.message);
@@ -1580,13 +1605,22 @@ function doLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
   appCurrentUser = null;
   appEjecutorActivo = null;
-  document.getElementById('loginNombre').value = '';
-  document.getElementById('loginClave').value = '';
+  DB.set('appCurrentUser', null);
+  // Limpiar y habilitar campos
+  const lu = document.getElementById('loginNombre');
+  const lp = document.getElementById('loginClave');
+  const le = document.getElementById('loginError');
+  if (lu) { lu.value = ''; lu.disabled = false; }
+  if (lp) { lp.value = ''; lp.disabled = false; }
+  if (le) { le.style.display = 'none'; le.style.color = '#f08a6a'; }
+  // Ocultar mainScreen y selector
   document.getElementById('mainScreen').style.display = 'none';
   const ve = document.getElementById('view-ejecutor');
-  ve.classList.remove('active');
-  ve.classList.add('hidden-right');
-  document.getElementById('view-login').classList.add('active');
+  if (ve) { ve.classList.remove('active'); ve.classList.add('hidden-right'); }
+  // Mostrar login limpio — sin hidden-right
+  const vl = document.getElementById('view-login');
+  vl.classList.remove('hidden-right');
+  vl.classList.add('active');
 }
 
 async function cargarUsuariosApp() {
@@ -2411,16 +2445,28 @@ async function renderSync() {
 }
 
 async function actualizarAsignaciones() {
-  const btn = event.target;
-  btn.textContent = '⏳ Leyendo Drive...';
-  btn.disabled = true;
+  const btn = event?.target;
+  if (btn) { btn.textContent = '⏳ Actualizando...'; btn.disabled = true; }
   try {
+    const token = getDriveToken();
+    if (!token) {
+      showToast('Conectá Drive primero');
+      if (btn) { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }
+      return;
+    }
+    // 1. Bajar base completa (ACRES_DATA) — aplica para TODOS los ejecutores
+    await cargarBaseCompletaDrive(token);
+    // 2. Bajar cambios recientes (SYNC_UPDATES) — también aplica para todos
     await leerAsignacionesDrive();
-    btn.textContent = '✓ Listo';
+    if (btn) btn.textContent = '✓ Listo';
+    showToast('✓ Asignaciones actualizadas para todos los ejecutores');
   } catch(e) {
-    btn.textContent = '✗ Error: ' + e.message;
+    if (btn) btn.textContent = '✗ Error';
+    showToast('Error: ' + e.message);
   }
-  setTimeout(() => { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }, 3000);
+  setTimeout(() => {
+    if (btn) { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }
+  }, 3000);
   renderHome();
 }
 
@@ -2475,6 +2521,16 @@ async function testSheets() {
   }
 }
 
+function volverASelectorEjecutor() {
+  // Volver al selector de cuadrillas sin cerrar sesión
+  if (!appCurrentUser || appCurrentUser.rol !== 'inspector') return;
+  appEjecutorActivo = null;
+  document.getElementById('mainScreen').style.display = 'none';
+  const ve = document.getElementById('view-ejecutor');
+  ve.classList.remove('hidden-right');
+  ve.classList.add('active');
+}
+
 async function renderProfile() {
   const pendientes = DB.get('pendientes', []);
   const totalFotos = await IDB.contarFotos();
@@ -2484,6 +2540,13 @@ async function renderProfile() {
   document.getElementById('profileStorageUsed').textContent = (totalBytes/(1024*1024)).toFixed(1) + ' MB';
   document.getElementById('profileModeChip').textContent = CONFIG.DRIVE_CONNECTED ? '🟢 Conectado a Drive' : '📦 Modo local';
   document.getElementById('profileServerStatus').textContent = CONFIG.DRIVE_CONNECTED ? 'Conectado' : 'No conectado';
+  // Mostrar botón "Cambiar cuadrilla" solo para inspectores con múltiples ejecutores
+  const btnCambiar = document.getElementById('btnCambiarEjecutor');
+  if (btnCambiar) {
+    const esInspector = appCurrentUser?.rol === 'inspector';
+    const tieneVarios = (appCurrentUser?.ejecutores || []).length > 1;
+    btnCambiar.style.display = (esInspector && tieneVarios) ? 'flex' : 'none';
+  }
 }
 
 function updateConnBanner() {
