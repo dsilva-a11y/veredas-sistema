@@ -2153,6 +2153,18 @@ function checkOAuthCallback() {
       sessionStorage.removeItem('bo_pending_action');
       if (action === 'publish') publishToDrive();
       else if (action === 'sync') syncFromDrive();
+      else if (action === 'reshare') {
+        // Reintentar compartir con el email guardado
+        const pendingEmail = sessionStorage.getItem('bo_pending_share_email');
+        sessionStorage.removeItem('bo_pending_share_email');
+        if (pendingEmail) {
+          setTimeout(() => {
+            const emailInput = document.getElementById('driveShareEmail');
+            if (emailInput) emailInput.value = pendingEmail;
+            compartirDrive();
+          }, 800);
+        }
+      }
       else if (action === 'loadusers') {
         // Cargar usuarios desde Drive y volver al login
         loadBoUsersRemoto().then(() => {
@@ -3230,6 +3242,20 @@ async function compartirDrive() {
   }
   resEl.innerHTML = '<span style="color:var(--yellow)">⏳ Dando acceso...</span>';
 
+  // Verificar que el token siga válido antes de intentar compartir
+  try {
+    const test = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    if (test.status === 401) {
+      driveToken = null;
+      resEl.innerHTML = '<span style="color:var(--yellow)">⏳ Sesión de Drive vencida — reconectando...</span>';
+      sessionStorage.setItem('bo_pending_share_email', email);
+      loginDrive('reshare');
+      return;
+    }
+  } catch(e) {}
+
   // IDs fijos de los archivos a compartir
   const archivosIds = [
     '1YuC6L-G340iHYdkfDAli5gKxZZroOekT', // SYNC_UPDATES.json
@@ -3259,6 +3285,13 @@ async function compartirDrive() {
         signal: controller.signal
       });
       clearTimeout(timeout);
+      if (res.status === 401) {
+        driveToken = null;
+        sessionStorage.setItem('bo_pending_share_email', email);
+        resEl.innerHTML = '<span style="color:var(--yellow)">⏳ Sesión vencida — reconectando...</span>';
+        loginDrive('reshare');
+        return;
+      }
       if (res.ok) ok++;
       else {
         const err = await res.json();
