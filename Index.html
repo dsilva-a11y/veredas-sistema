@@ -743,7 +743,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           <div class="pb2">
             <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
               Agregá el email de quien quiera acceder al backoffice con su propia cuenta Google.<br>
-              Recibirá permisos de <strong>Editor</strong> sobre los archivos de datos (SYNC_UPDATES y ACRES_DATA).
+              Recibirá permisos de <strong>Editor</strong> sobre los archivos de datos (SYNC_UPDATES, ACRES_DATA, BO_USERS y la carpeta de fotos).
             </div>
             <div style="display:flex;gap:8px;margin-bottom:10px">
               <input class="form-input" id="driveShareEmail" type="email" placeholder="e.rekosky@construmex.com.ar" style="flex:1">
@@ -3014,14 +3014,23 @@ function saveBoUsers(users) {
 
 async function saveBoUsersRemoto(users) {
   if (!driveToken) return;
+  const FIXED_BO_USERS_ID = '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_';
   try {
     const content = JSON.stringify(users);
-    const q = `name='BO_USERS.json' and trashed=false`;
-    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    // Intentar con el ID fijo primero
+    let existId = FIXED_BO_USERS_ID;
+    const check = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_BO_USERS_ID}?fields=id`, {
       headers: { Authorization: 'Bearer ' + driveToken }
     });
-    const sd = await sr.json();
-    const existId = sd.files?.[0]?.id;
+    if (!check.ok) {
+      // Fallback: buscar por nombre
+      const q = `name='BO_USERS.json' and trashed=false`;
+      const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+      const sd = await sr.json();
+      existId = sd.files?.[0]?.id;
+    }
     const meta = { name: 'BO_USERS.json', mimeType: 'application/json' };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
@@ -3035,16 +3044,24 @@ async function saveBoUsersRemoto(users) {
 
 async function loadBoUsersRemoto() {
   if (!driveToken) return;
+  const FIXED_BO_USERS_ID = '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_';
   try {
-    const q = `name='BO_USERS.json' and trashed=false`;
-    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+    // Intentar con ID fijo primero — funciona para cualquier cuenta con permisos
+    let r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_BO_USERS_ID}?alt=media`, {
       headers: { Authorization: 'Bearer ' + driveToken }
     });
-    const sd = await sr.json();
-    if (!sd.files?.length) return;
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
-      headers: { Authorization: 'Bearer ' + driveToken }
-    });
+    if (!r.ok) {
+      // Fallback: buscar por nombre
+      const q = `name='BO_USERS.json' and trashed=false`;
+      const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+      const sd = await sr.json();
+      if (!sd.files?.length) return;
+      r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+    }
     if (!r.ok) return;
     const users = await r.json();
     if (Array.isArray(users) && users.length) {
@@ -3256,22 +3273,13 @@ async function compartirDrive() {
     }
   } catch(e) {}
 
-  // IDs fijos de los archivos a compartir
+  // IDs fijos de los archivos a compartir — incluye BO_USERS.json siempre
   const archivosIds = [
     '1YuC6L-G340iHYdkfDAli5gKxZZroOekT', // SYNC_UPDATES.json
     '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h',  // ACRES_DATA.json
     '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv',  // carpeta 01_VEREDAS
+    '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_',  // BO_USERS.json
   ];
-
-  // Intentar también dar acceso al BO_USERS.json si existe
-  try {
-    const q = `name='BO_USERS.json' and trashed=false`;
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
-      headers: { Authorization: 'Bearer ' + driveToken }
-    });
-    const d = await r.json();
-    if (d.files?.[0]?.id && !archivosIds.includes(d.files[0].id)) archivosIds.push(d.files[0].id);
-  } catch(e) {}
 
   let ok = 0; const errors = [];
   for (const fileId of archivosIds) {
