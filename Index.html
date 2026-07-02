@@ -2523,6 +2523,25 @@ async function sincronizarTodo() {
   if (!driveToken) { loginDrive('sync'); return; }
   updateSyncBar('Sincronizando...', 'var(--yellow)');
   try {
+    // Si ALL está vacío, bajar la base completa de Drive primero
+    if (ALL.length === 0) {
+      updateSyncBar('Descargando base completa desde Drive...', 'var(--yellow)');
+      try {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_DATA_ID}?alt=media`, {
+          headers: { Authorization: 'Bearer ' + driveToken }
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (Array.isArray(data) && data.length) {
+            ALL.length = 0;
+            data.forEach(f => ALL.push(f));
+            saveData();
+            renderTable(); applyFilters();
+            updateSyncBar(`✓ ${data.length} frentes cargados — continuando sync...`, 'var(--green)');
+          }
+        }
+      } catch(e) { console.warn('Error bajando base:', e.message); }
+    }
     // PASO 1: Si hay importación masiva pendiente, publicar la base completa primero
     // Esto garantiza que la importación no sea pisada por los datos de Drive
     if (_importacionPendiente) {
@@ -3836,8 +3855,9 @@ async function importarJSON(input) {
       }
     }
     renderTable(); applyFilters(); initDash(); initCert();
+    saveData();
     _importacionPendiente = true;
-    result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos. Presioná <strong>🔄 Sincronizar</strong> para publicar en Drive.</span>`;
+    result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos — ${ALL.length} frentes en total. Presioná <strong>🔄 Sincronizar</strong> para publicar en Drive.</span>`;
   } catch(e) {
     result.innerHTML = `<span style="color:var(--accent)">❌ Error: ${e.message}</span>`;
   }
