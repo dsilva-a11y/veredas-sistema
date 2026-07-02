@@ -1239,7 +1239,7 @@ function calcStats(){
     r.estados[e]=(r.estados[e]||0)+m2;
     if(e==='EJECUTADO'){r.m2ej+=m2;r.frej++;}
     else if(e==='EN EJECUCION'){r.m2ei+=m2;r.frei++;}
-    else if(e==='A EJECUTAR'){r.m2ae+=m2;r.frae++;}
+    else if(e==='A EJECUTAR'||e==='-'){r.m2ae+=m2;r.frae++;} // incluir '-' en A ejecutar
     else if(e==='ANULADA')r.fran++;
     const rp=a.resp||'Sin asignar';
     if(!r.resps[rp])r.resps[rp]={total:0,ej:0};
@@ -1291,8 +1291,10 @@ function renderParte(){
   const activos=ALL.filter(a=>{
     if(a.estado==='EJECUTADO'||a.estado==='ANULADA')return false;
     if((a.pct||0)===0)return false;
-    if((a.pct||0)>=100)return false;
+    if((a.pct||0)>=98)return false;
     if(!a.resp||a.resp==='RELEVAR')return false;
+    if(!a.dir||a.dir.trim().length<=2)return false;
+    if(/^\d+$/.test((a.resp||'').trim()))return false;
     return true;
   });
 
@@ -1341,11 +1343,11 @@ function renderParte(){
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed">
       <colgroup>
-        <col style="width:68px">
-        <col style="width:210px">
-        <col style="width:48px">
-        <col style="width:68px">
-        <col style="width:44px">
+        <col style="width:58px">
+        <col style="width:200px">
+        <col style="width:45px">
+        <col style="width:65px">
+        <col style="width:38px">
       </colgroup>
       <thead><tr style="background:#555;color:#fff">
         <th style="padding:4px 6px;border:1px solid #999;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">RESP.</th>
