@@ -1362,11 +1362,11 @@ function renderParte(){
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:10.5px;table-layout:fixed">
       <colgroup>
-        <col style="width:58px">
-        <col style="width:200px">
-        <col style="width:45px">
-        <col style="width:65px">
-        <col style="width:38px">
+        <col style="width:55px">
+        <col style="width:160px">
+        <col style="width:42px">
+        <col style="width:60px">
+        <col style="width:36px">
       </colgroup>
       <thead><tr style="background:#555;color:#fff">
         <th style="padding:4px 6px;border:1px solid #999;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">RESP.</th>
@@ -1906,6 +1906,7 @@ function initDashPeriodos(){
   sel.value=current;
 }
 function initDash(){
+  if(!ALL.length) return;  // no hay datos aún
   initDashPeriodos();
   const periodo=document.getElementById('dashPeriodo')?.value||'total';
   // Filtrar datos según período
@@ -2536,7 +2537,13 @@ async function sincronizarTodo() {
             ALL.length = 0;
             data.forEach(f => ALL.push(f));
             saveData();
-            renderTable(); applyFilters();
+            renderTable(); applyFilters(); initDash(); initCert();
+            const S2=calcStats();
+            document.getElementById('nb-total').textContent=S2.frtot;
+            document.getElementById('nb-ei').textContent=S2.frei;
+            document.getElementById('nb-ae').textContent=S2.frae;
+            document.getElementById('nb-ej').textContent=S2.frej;
+            document.getElementById('nb-an').textContent=S2.fran;
             updateSyncBar(`✓ ${data.length} frentes cargados — continuando sync...`, 'var(--green)');
           }
         }
@@ -3854,7 +3861,8 @@ async function importarJSON(input) {
         new_++;
       }
     }
-    renderTable(); applyFilters(); initDash(); initCert();
+    renderTable(); applyFilters();
+    if(ALL.length){ initDash(); initCert(); }
     saveData();
     _importacionPendiente = true;
     result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos — ${ALL.length} frentes en total. Presioná <strong>🔄 Sincronizar</strong> para publicar en Drive.</span>`;
