@@ -365,6 +365,8 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <div class="month-tabs" id="monthTabs"></div>
           <button class="btn bg" onclick="exportCert()">↓ Exportar CSV</button>
+          <button class="btn bg" onclick="exportXLSXCert()" style="background:rgba(61,214,140,.15);color:var(--green);border-color:rgba(61,214,140,.3)">↓ Excel</button>
+          <button class="btn bg" onclick="exportXLSXParaMedir()" style="background:rgba(240,192,80,.15);color:var(--yellow);border-color:rgba(240,192,80,.3)" title="Exportar frentes finalizados sin fecha de medición">📏 Para medir</button>
         </div>
       </div>
 
@@ -558,6 +560,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </select>
           <button class="btn bg" onclick="clearF()" style="margin-left:auto">✕ Limpiar</button>
           <button class="btn bg" onclick="exportCSV()">↓ CSV</button>
+          <button class="btn bg" onclick="exportXLSXListado()" style="background:rgba(61,214,140,.15);color:var(--green);border-color:rgba(61,214,140,.3)">↓ Excel</button>
         </div>
         <div class="tw" style="max-height:calc(100vh - 220px);overflow-y:auto;overflow-x:auto">
           <table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:var(--bg2);z-index:2"><tr>
@@ -1234,18 +1237,19 @@ function respColor(n){const r=RESPS.find(x=>x.nombre===n||x.id===n);return r?r.c
 function calcStats(){
   const r={m2ej:0,m2ei:0,m2ae:0,m2tot:0,frej:0,frei:0,frae:0,fran:0,frtot:0,estados:{},resps:{},comunas:{},mats:{}};
   ALL.forEach(a=>{
-    const m2=a.area||0,e=a.estado||'-';
-    r.m2tot+=m2;r.frtot++;
+    const m2=a.area||0, e=a.estado||'-', pct=Number(a.pct||0);
+    r.m2tot+=m2; r.frtot++;
     r.estados[e]=(r.estados[e]||0)+m2;
-    if(e==='EJECUTADO'){r.m2ej+=m2;r.frej++;}
-    else if(e==='EN EJECUCION'){r.m2ei+=m2;r.frei++;}
-    else if(e==='A EJECUTAR'||e==='-'){r.m2ae+=m2;r.frae++;} // incluir '-' en A ejecutar
-    else if(e==='ANULADA')r.fran++;
+    if(e==='ANULADA'){ r.fran++; return; }
+    // Usar pct real para clasificar (igual que la certificación)
+    if(e==='EJECUTADO'||pct>=100){ r.m2ej+=m2; r.frej++; }
+    else if(pct>=2 && pct<100){ r.m2ei+=m2; r.frei++; }  // EN EJECUCION: 25/50/75/98%
+    else { r.m2ae+=m2; r.frae++; }                         // A ejecutar: 0% y 1%
     const rp=a.resp||'Sin asignar';
     if(!r.resps[rp])r.resps[rp]={total:0,ej:0};
-    r.resps[rp].total+=m2;if(e==='EJECUTADO')r.resps[rp].ej+=m2;
-    const cm=String(a.com||'?');r.comunas[cm]=(r.comunas[cm]||0)+m2;
-    const mt=a.mat||'SIN DATO';r.mats[mt]=(r.mats[mt]||0)+m2;
+    r.resps[rp].total+=m2; if(e==='EJECUTADO'||pct>=100)r.resps[rp].ej+=m2;
+    const cm=String(a.com||'?'); r.comunas[cm]=(r.comunas[cm]||0)+m2;
+    const mt=a.mat||'SIN DATO'; r.mats[mt]=(r.mats[mt]||0)+m2;
   });
   return r;
 }
@@ -1462,7 +1466,53 @@ function updateFrente(vi,fi,key,val){
   if(viajes[dateKey]&&viajes[dateKey][vi]&&viajes[dateKey][vi].frentes[fi])viajes[dateKey][vi].frentes[fi][key]=val;
   saveViajes();
 }
-function saveViajes(){localStorage.setItem('veredas_viajes',JSON.stringify(viajes));}
+function saveViajes(){
+  localStorage.setItem('veredas_viajes',JSON.stringify(viajes));
+  // Subir a Drive para compartir con otros usuarios del back
+  if(driveToken) saveViajesDrive();
+}
+
+async function saveViajesDrive(){
+  try {
+    const content = JSON.stringify(viajes);
+    const q = `name='HORM_VIAJES.json' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`,{
+      headers:{Authorization:'Bearer '+driveToken}
+    });
+    const sd = await sr.json();
+    const existId = sd.files?.[0]?.id;
+    const meta = {name:'HORM_VIAJES.json',mimeType:'application/json'};
+    const form = new FormData();
+    form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+    form.append('file',new Blob([content],{type:'application/json'}));
+    const url = existId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existId}?uploadType=multipart`
+      : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+    await fetch(url,{method:existId?'PATCH':'POST',headers:{Authorization:'Bearer '+driveToken},body:form});
+  } catch(e){ console.warn('saveViajesDrive:',e.message); }
+}
+
+async function loadViajesDrive(){
+  if(!driveToken) return;
+  try {
+    const q = `name='HORM_VIAJES.json' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`,{
+      headers:{Authorization:'Bearer '+driveToken}
+    });
+    const sd = await sr.json();
+    if(!sd.files?.length) return;
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${sd.files[0].id}?alt=media`,{
+      headers:{Authorization:'Bearer '+driveToken}
+    });
+    if(!r.ok) return;
+    const data = await r.json();
+    if(data && typeof data === 'object'){
+      viajes = data;
+      localStorage.setItem('veredas_viajes',JSON.stringify(viajes));
+      showToast('✓ Hormigones sincronizados desde Drive');
+    }
+  } catch(e){ console.warn('loadViajesDrive:',e.message); }
+}
 function exportHorm(){
   const dateKey=getViajesDate();
   const dayViajes=viajes[dateKey]||[];
@@ -1930,7 +1980,89 @@ function qf(estado,el){fEv=estado;fRv='';fCv='';fMv='';searchV='';document.getEl
 function fillMatSelect(){const mats=[...new Set(ALL.map(a=>a.mat).filter(Boolean))].sort();const sel=document.getElementById('fMat');sel.innerHTML='<option value="">Todas las materialidades</option>';mats.forEach(m=>sel.innerHTML+=`<option value="${m}">${m}</option>`);}
 function fillComSelect(){const coms=[...new Set(ALL.map(a=>String(a.com||'')).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));const sel=document.getElementById('fComuna');sel.innerHTML='<option value="">Todas las comunas</option>';coms.forEach(c=>sel.innerHTML+=`<option value="${c}">Comuna ${c}</option>`);}
 function fillRespSelect(){const sel=document.getElementById('fResp');sel.innerHTML='<option value="">Todos los responsables</option>';RESPS.forEach(r=>sel.innerHTML+=`<option value="${r.nombre}">${r.nombre}</option>`);}
-function exportCSV(){const h=['ACRE','DIRECCION','ALTURA','COMUNA','AREA_M2','INTERVENCION','MATERIALIDAD','ESTADO','RESPONSABLE','PCT','F_PROG','F_APERTURA','F_HORMIGON','F_COLOCACION','F_FIN','F_MEDICION','OBS_CORREGIR','OBS_GENERAL'];const rows=filtered.map(a=>[a.id,a.dir,a.alt,a.com,a.area,a.interv,a.mat,a.estado,a.resp,a.pct,a.f_prog,a.f_aper,a.f_horm,a.f_col,a.f_fin,a.f_med,(a.obs||'').replace(/,/g,';'),(a.obs_g||'').replace(/,/g,';')].join(','));const el=document.createElement('a');el.href='data:text/csv;charset=utf-8,'+encodeURIComponent([h.join(','),...rows].join('\n'));el.download='veredas_'+isoToday()+'.csv';el.click();}
+// ─── EXPORTACIÓN EXCEL ───────────────────────────────────────────
+function exportXLSX(datos, nombreArchivo, nombreHoja) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(datos);
+  // Anchos automáticos por columna
+  const cols = Object.keys(datos[0] || {}).map(k => ({ wch: Math.max(k.length, 12) }));
+  ws['!cols'] = cols;
+  XLSX.utils.book_append_sheet(wb, ws, nombreHoja || 'Datos');
+  XLSX.writeFile(wb, nombreArchivo + '_' + isoToday() + '.xlsx');
+  showToast(`✓ Excel descargado: ${nombreArchivo}`);
+}
+
+function exportXLSXListado() {
+  if (!filtered || !filtered.length) { showToast('No hay frentes para exportar'); return; }
+  const datos = filtered.map(a => ({
+    'ACRE': a.id, 'DIRECCIÓN': a.dir, 'ALTURA': a.alt,
+    'COMUNA': a.com, 'M²': a.area, 'INTERVENCIÓN': a.interv,
+    'MATERIALIDAD': a.mat, 'ESTADO': a.estado, 'RESPONSABLE': a.resp,
+    '%': a.pct, 'F.PROG': a.f_prog||'', 'F.APERTURA': a.f_aper||'',
+    'F.HORMIGÓN': a.f_horm||'', 'F.COLOCACIÓN': a.f_col||'',
+    'F.FIN': a.f_fin||'', 'F.MEDICIÓN': a.f_med||'',
+    'PRIORITARIO': a.prio ? 'SÍ' : '',
+    'OBS.SUPERVISOR': a.obs_back||'', 'OBS.GENERAL': a.obs_g||''
+  }));
+  exportXLSX(datos, 'listado_frentes', 'Listado');
+}
+
+function exportXLSXParteActual() {
+  const parteEl = document.getElementById('parteContent');
+  if (!parteEl || !parteEl.querySelector('table')) { showToast('Generá el parte primero'); return; }
+  const dateVal = document.getElementById('parteInputDate').value || isoToday();
+  const activos = ALL.filter(a => {
+    if(a.estado==='EJECUTADO'||a.estado==='ANULADA') return false;
+    if((a.pct||0)===0||(a.pct||0)>=98) return false;
+    if(!a.resp||a.resp==='RELEVAR') return false;
+    if(!a.dir||a.dir.trim().length<=2) return false;
+    if(/^\d+$/.test((a.resp||'').trim())) return false;
+    return true;
+  });
+  const datos = activos.sort((a,b) => (a.resp||'').localeCompare(b.resp||'')).map(a => ({
+    'RESPONSABLE': a.resp, 'DIRECCIÓN': a.dir, 'ALTURA': a.alt||'',
+    'F.PROGRAMADA': a.f_prog||'—', '%': (a.pct||0)+'%',
+    'PRIORITARIO': a.prio ? '★' : ''
+  }));
+  exportXLSX(datos, 'parte_' + dateVal, 'Parte ' + dateVal);
+}
+
+function exportXLSXCert() {
+  const mesEl = document.querySelector('.month-tab.active');
+  const mes = mesEl ? mesEl.textContent.trim() : 'mes';
+  const activos = ALL.filter(a =>
+    a.estado !== 'ANULADA' &&
+    (a.f_med ? a.f_med.slice(0,7) === (document.querySelector('.month-tab.active')?.dataset?.mes || '') : false)
+  );
+  // Si no hay filtro por mes, exportar todos los certificables
+  const datos = ALL.filter(a =>
+    a.estado !== 'ANULADA' && a.estado !== 'EJECUTADO' && (a.pct||0) >= 1
+  ).map(a => ({
+    'ACRE': a.id, 'DIRECCIÓN': a.dir, 'ALTURA': a.alt||'',
+    'COMUNA': a.com||'', 'M²': a.area||0,
+    'MATERIALIDAD': a.mat||'', 'ESTADO': a.estado,
+    'RESPONSABLE': a.resp||'', '%': a.pct||0,
+    'F.MEDICIÓN': a.f_med||'', 'F.FIN': a.f_fin||''
+  }));
+  exportXLSX(datos, 'certificacion_' + mes.replace(' ','_'), 'Certificación');
+}
+
+function exportXLSXParaMedir() {
+  // Frentes finalizados (100%) sin fecha de medición
+  const datos = ALL.filter(a =>
+    (a.pct >= 99 || a.estado === 'EJECUTADO') && !a.f_med && a.estado !== 'ANULADA'
+  ).map(a => ({
+    'ACRE': a.id, 'DIRECCIÓN': a.dir, 'ALTURA': a.alt||'',
+    'COMUNA': a.com||'', 'M²': a.area||0,
+    'MATERIALIDAD': a.mat||'', 'RESPONSABLE': a.resp||'',
+    'F.FIN': a.f_fin||'', 'OBS': a.obs_g||''
+  }));
+  if (!datos.length) { showToast('No hay frentes pendientes de medición'); return; }
+  exportXLSX(datos, 'para_medir', 'Para medir');
+  showToast(`✓ ${datos.length} frentes para medir exportados`);
+}
+
+
 
 // ─── CONFIG RESPONSABLES ──────────────────────────────────────────
 function addResp(){
@@ -2020,7 +2152,11 @@ function goTo(p,el){
   document.getElementById('topT').textContent=t;
   document.getElementById('topS').textContent=s;
   if(p==='parte') initParte();
-  if(p==='hormigon'){document.getElementById('hormInputDate').value=document.getElementById('hormInputDate').value||isoToday();renderHormigon();}
+  if(p==='hormigon'){
+    document.getElementById('hormInputDate').value=document.getElementById('hormInputDate').value||isoToday();
+    if(driveToken) loadViajesDrive().then(()=>renderHormigon());
+    else renderHormigon();
+  }
   if(p==='cert') initCert();
   if(p==='dash') initDash();
   if(p==='mapa') initMapa();
@@ -2149,7 +2285,7 @@ function checkOAuthCallback() {
       // Limpiar la URL
       history.replaceState(null, '', window.location.pathname);
       // Cargar permisos Drive en panel Responsables
-      setTimeout(() => { listarAccesosDrive(); loadBoUsersRemoto(); }, 500);
+      setTimeout(() => { listarAccesosDrive(); loadBoUsersRemoto(); loadViajesDrive(); }, 500);
       // Ejecutar acción pendiente
       const action = sessionStorage.getItem('bo_pending_action');
       sessionStorage.removeItem('bo_pending_action');

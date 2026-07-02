@@ -1588,6 +1588,20 @@ function abrirAppPrincipal() {
     const token = getDriveToken();
     if (token) {
       setTimeout(async () => {
+        try {
+          const FIXED_BO_USERS_ID = '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_';
+          const ru = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_BO_USERS_ID}?alt=media`, {
+            headers: { Authorization: 'Bearer ' + token }
+          });
+          if (ru.ok) {
+            const users = await ru.json();
+            if (Array.isArray(users) && users.length) {
+              localStorage.setItem('bo_users', JSON.stringify(users));
+              const updated = users.find(u => u.nombre.toLowerCase() === appCurrentUser?.nombre?.toLowerCase());
+              if (updated) { appCurrentUser = updated; DB.set('appCurrentUser', updated); }
+            }
+          }
+        } catch(e) {}
         syncLog('Auto-actualizando asignaciones...', '#4fa3e8');
         await cargarBaseCompletaDrive(token);
         await leerAsignacionesDrive();
@@ -2456,12 +2470,35 @@ async function actualizarAsignaciones() {
       if (btn) { btn.textContent = '📥 Actualizar mis asignaciones'; btn.disabled = false; }
       return;
     }
-    // 1. Bajar base completa (ACRES_DATA) — aplica para TODOS los ejecutores
+    // 1. Bajar usuarios actualizados (BO_USERS) — para reflejar cambios de ejecutores
+    try {
+      const FIXED_BO_USERS_ID = '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_';
+      const ru = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_BO_USERS_ID}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      if (ru.ok) {
+        const users = await ru.json();
+        if (Array.isArray(users) && users.length) {
+          localStorage.setItem('bo_users', JSON.stringify(users));
+          // Actualizar ejecutores del usuario actual
+          const currentUser = appCurrentUser;
+          if (currentUser) {
+            const updated = users.find(u => u.nombre.toLowerCase() === currentUser.nombre.toLowerCase());
+            if (updated) {
+              appCurrentUser = updated;
+              DB.set('appCurrentUser', updated);
+            }
+          }
+        }
+      }
+    } catch(e) { console.warn('Error bajando usuarios:', e.message); }
+
+    // 2. Bajar base completa (ACRES_DATA) — aplica para TODOS los ejecutores
     await cargarBaseCompletaDrive(token);
-    // 2. Bajar cambios recientes (SYNC_UPDATES) — también aplica para todos
+    // 3. Bajar cambios recientes (SYNC_UPDATES) — también aplica para todos
     await leerAsignacionesDrive();
     if (btn) btn.textContent = '✓ Listo';
-    showToast('✓ Asignaciones actualizadas para todos los ejecutores');
+    showToast('✓ Actualizado — ejecutores y asignaciones al día');
   } catch(e) {
     if (btn) btn.textContent = '✗ Error';
     showToast('Error: ' + e.message);
