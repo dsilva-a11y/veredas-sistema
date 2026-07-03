@@ -1947,10 +1947,11 @@ function initDash(){
   // Destruir charts anteriores
   Object.values(dashCharts).forEach(c=>{try{c.destroy();}catch(e){}});
   dashCharts={};
-  document.getElementById('kM2Ej').textContent=fmt(Sp.m2ej)+' m²';document.getElementById('kFrEj').textContent=Sp.frej.toLocaleString('es-AR')+' frentes';document.getElementById('kb-ej').style.width=(Sp.m2ej/Sp.m2tot*100)+'%';
-  document.getElementById('kM2Ei').textContent=fmt(Sp.m2ei)+' m²';document.getElementById('kFrEi').textContent=Sp.frei.toLocaleString('es-AR')+' frentes';document.getElementById('kb-ei').style.width=(Sp.m2ei/Sp.m2tot*100)+'%';
-  document.getElementById('kM2Ae').textContent=fmt(Sp.m2ae)+' m²';document.getElementById('kFrAe').textContent=Sp.frae.toLocaleString('es-AR')+' frentes';document.getElementById('kb-ae').style.width=(Sp.m2ae/Sp.m2tot*100)+'%';
-  document.getElementById('kM2Tot').textContent=fmt(Sp.m2tot)+' m²';document.getElementById('kFrTot').textContent=Sp.frtot.toLocaleString('es-AR')+' frentes totales';
+  const _tot = Sp.m2tot || 1; // evitar division por cero
+  document.getElementById('kM2Ej').textContent=fmt(Sp.m2ej||0)+' m²';document.getElementById('kFrEj').textContent=(Sp.frej||0).toLocaleString('es-AR')+' frentes';document.getElementById('kb-ej').style.width=((Sp.m2ej||0)/_tot*100)+'%';
+  document.getElementById('kM2Ei').textContent=fmt(Sp.m2ei||0)+' m²';document.getElementById('kFrEi').textContent=(Sp.frei||0).toLocaleString('es-AR')+' frentes';document.getElementById('kb-ei').style.width=((Sp.m2ei||0)/_tot*100)+'%';
+  document.getElementById('kM2Ae').textContent=fmt(Sp.m2ae||0)+' m²';document.getElementById('kFrAe').textContent=(Sp.frae||0).toLocaleString('es-AR')+' frentes';document.getElementById('kb-ae').style.width=((Sp.m2ae||0)/_tot*100)+'%';
+  document.getElementById('kM2Tot').textContent=fmt(Sp.m2tot||0)+' m²';document.getElementById('kFrTot').textContent=(Sp.frtot||0).toLocaleString('es-AR')+' frentes totales';
   const clrs={'EJECUTADO':'#3dd68c','EN EJECUCION':'#f0c050','A EJECUTAR':'#4fa3e8','ANULADA':'#5a5b63','-':'#323338'};
   const eL=Object.keys(Sp.estados);
   dashCharts['cEstados']=new Chart(document.getElementById('cEstados'),{type:'bar',data:{labels:eL,datasets:[{data:eL.map(l=>Sp.estados[l]),backgroundColor:eL.map(l=>clrs[l]||'#a978e8'),borderRadius:3,maxBarThickness:60}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)+' m²'}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#2a2b30'},ticks:{font:{size:10},callback:v=>fmt(v)}}}}});
