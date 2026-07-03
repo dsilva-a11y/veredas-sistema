@@ -577,7 +577,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </tr></thead><tbody id="tbody"></tbody></table>
         </div>
       </div>
-      <div class="pg"><span id="pgInfo">—</span><div class="pgb" id="pgBtns"></div></div>
+      <div class="pg"><span id="pgInfo">—</span></div>
     </div>
 
     <!-- ══ ADMINISTRACIÓN ══ -->
@@ -1003,7 +1003,7 @@ function renderAsigTable() {
     if (resp && a.resp !== resp) return false;
     if (estado && a.estado !== estado) return false;
     return true;
-  }).slice(0, 500);
+  });
   document.getElementById('asigInfo').textContent = `Mostrando ${filtered.length} frentes`;
   tbody.innerHTML = filtered.map(a => `
     <tr style="border-top:1px solid var(--line);cursor:pointer" onclick="this.querySelector('input').click()">
@@ -2030,9 +2030,8 @@ function applyFilters(){
   currentPage=1;renderTable();
 }
 function renderTable(){
-  const s=(currentPage-1)*PER,page=filtered.slice(s,s+PER);
-  document.getElementById('pgInfo').textContent=`Mostrando ${s+1}–${Math.min(s+PER,filtered.length)} de ${filtered.length.toLocaleString('es-AR')} frentes · ${fmt(filtered.reduce((a,x)=>a+(x.area||0),0))} m²`;
-  document.getElementById('tbody').innerHTML=page.map(a=>`<tr onclick="openModal('${a.id}')">
+  document.getElementById('pgInfo').textContent=`Mostrando ${filtered.length.toLocaleString('es-AR')} frentes · ${fmt(filtered.reduce((a,x)=>a+(x.area||0),0))} m²`;
+  document.getElementById('tbody').innerHTML=filtered.map(a=>`<tr onclick="openModal('${a.id}')">
     <td class="tc">${a.id}</td><td class="tn">${a.dir} ${a.alt}</td>
     <td class="tss">${a.com||'—'}</td><td class="tss">${a.area?a.area.toFixed(1):'—'}</td>
     <td class="tss">${a.interv||'—'}</td>
@@ -2044,16 +2043,6 @@ function renderTable(){
     <td style="text-align:center;color:var(--yellow);font-size:13px">${a.prio?'★':''}</td>
     <td class="tss" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic">${a.obs_g||'—'}</td>
   </tr>`).join('');
-  const total=Math.ceil(filtered.length/PER);
-  const pgEl=document.getElementById('pgBtns');
-  let b='';
-  if(currentPage>1)b+=`<div class="pbt" onclick="goPage(${currentPage-1})">‹</div>`;
-  const s2=Math.max(1,currentPage-2),e2=Math.min(total,currentPage+2);
-  if(s2>1){b+=`<div class="pbt" onclick="goPage(1)">1</div>`;if(s2>2)b+=`<div class="pbt" style="pointer-events:none">…</div>`;}
-  for(let i=s2;i<=e2;i++)b+=`<div class="pbt ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</div>`;
-  if(e2<total){if(e2<total-1)b+=`<div class="pbt" style="pointer-events:none">…</div>`;b+=`<div class="pbt" onclick="goPage(${total})">${total}</div>`;}
-  if(currentPage<total)b+=`<div class="pbt" onclick="goPage(${currentPage+1})">›</div>`;
-  pgEl.innerHTML=b;
 }
 function goPage(p){currentPage=p;renderTable();}
 function search(v){searchV=v;applyFilters();}
