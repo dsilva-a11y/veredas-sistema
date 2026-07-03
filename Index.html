@@ -1071,10 +1071,11 @@ async function publicarAsignaciones(silencioso = false) {
       } catch(e) {}
     }
 
-    // Publicar todos los frentes asignados
+    // Publicar todos los frentes asignados + los editados en esta sesión sin responsable
+    // (ej: un frente que se anula y se le saca el responsable debe seguir llegando a la app)
     // Regla: si el backoffice editó el pct/estado (marcado con _editado), ese valor gana
     // Si no fue editado, respetar el pct del inspector (existing en Drive)
-    const asignados = ALL.filter(a => a.resp && a.resp.trim());
+    const asignados = ALL.filter(a => (a.resp && a.resp.trim()) || a._editado === true);
     const updates = asignados.map(a => {
       const existing = existingData[a.id] || {};
       // Si el backoffice editó este frente en esta sesión, su valor gana
@@ -1119,6 +1120,10 @@ async function publicarAsignaciones(silencioso = false) {
         method: 'POST', headers: { Authorization: 'Bearer ' + driveToken }, body: form
       });
     }
+    // Ya se publicó lo editado en esta sesión: limpiar el flag para no reprocesarlo
+    // como "edición local pendiente" en la próxima resolución de conflictos
+    asignados.forEach(a => { a._editado = false; });
+    saveData();
     if (!silencioso) {
       updateSyncBar(`✓ Asignaciones publicadas ${new Date().toLocaleTimeString('es-AR')}`, 'var(--green)');
       showToast('Asignaciones publicadas — los inspectores verán sus frentes al conectar Drive');
@@ -1167,6 +1172,8 @@ async function importarExcel(input) {
         f_col: existing?.f_col || null,
         f_fin: existing?.f_fin || null,
         f_med: existing?.f_med || null,
+        _updated: new Date().toISOString(),
+        _editado: true,
       };
       if (existing) { Object.assign(existing, frente); updated++; }
       else { ALL.push(frente); added++; }
@@ -1174,7 +1181,12 @@ async function importarExcel(input) {
     result.innerHTML = `<span style="color:var(--green)">✓ ${added} frentes nuevos agregados · ${updated} actualizados · ${errors} errores</span>`;
     saveData();
     renderTable();
-    showToast(`Importación completa: ${added} nuevos, ${updated} actualizados`);
+    // Igual que la Planilla Madre: marcar pendiente para que la próxima "Sincronizar" publique en Drive
+    if (added + updated > 0) {
+      _importacionPendiente = true;
+      updateSyncBar(`⚠ Importación lista (${added + updated} frentes) — Sincronizá para publicar en Drive`, 'var(--yellow)');
+    }
+    showToast(`Importación completa: ${added} nuevos, ${updated} actualizados — Sincronizá para publicar en Drive`);
   } catch(e) {
     result.innerHTML = `<span style="color:var(--accent)">Error: ${e.message}</span>`;
   }
