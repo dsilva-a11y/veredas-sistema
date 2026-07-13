@@ -270,6 +270,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <span id="syncBar" style="font-size:11px;color:var(--text3);margin-right:8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     <button onclick="publicarBaseCompleta()" title="Publicar toda la base en Drive (usar después de importar Planilla Madre o JSON)" style="padding:6px 11px;background:var(--bg3);border:1px solid var(--line);color:var(--text);font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;margin-right:6px">📤 Publicar base</button>
     <button onclick="hacerBackup()" title="Backup manual — guarda en Drive y descarga JSON" style="padding:6px 11px;background:var(--bg3);border:1px solid var(--line);color:var(--text);font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;margin-right:6px">💾 Backup</button>
+    <button onclick="verHistorial()" title="Historial de cambios: quién editó qué y cuándo" style="padding:6px 11px;background:var(--bg3);border:1px solid var(--line);color:var(--text);font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;margin-right:6px">📜 Historial</button>
     <button onclick="sincronizarTodo()" title="Baja avances de inspectores y publica cambios del backoffice" style="padding:6px 14px;background:var(--accent);border:none;color:#fff;font-size:11px;border-radius:4px;cursor:pointer;white-space:nowrap;font-weight:600">🔄 Sincronizar</button>
   </div>
   <div class="content">
@@ -1076,11 +1077,15 @@ async function publicarAsignaciones(silencioso = false) {
     // Regla: si el backoffice editó el pct/estado (marcado con _editado), ese valor gana
     // Si no fue editado, respetar el pct del inspector (existing en Drive)
     const asignados = ALL.filter(a => (a.resp && a.resp.trim()) || a._editado === true);
-    const updates = asignados.map(a => {
+    // IMPORTANTE: arrancar desde existingData completo y solo pisar/agregar lo de esta sesión.
+    // Antes esto se armaba SOLO con "asignados", lo que borraba de SYNC_UPDATES.json cualquier
+    // frente publicado por otro supervisor que este backoffice no tuviera localmente como asignado.
+    const updatesMap = { ...existingData };
+    asignados.forEach(a => {
       const existing = existingData[a.id] || {};
       // Si el backoffice editó este frente en esta sesión, su valor gana
       const backofficeEdito = a._editado === true;
-      return {
+      updatesMap[a.id] = {
         id: a.id,
         dir: a.dir || '',
         alt: a.alt || '',
@@ -1105,7 +1110,27 @@ async function publicarAsignaciones(silencioso = false) {
         _updated: backofficeEdito ? (a._updated || new Date().toISOString()) : (existing._updated || a._updated || null),
       };
     });
+    const updates = Object.values(updatesMap);
+    // Salvaguarda de concurrencia: si otro supervisor publicó DESPUÉS de que leímos existingId,
+    // re-leer y re-fusionar antes de escribir para no pisar su cambio (ventana angosta, pero real)
     if (existingId) {
+      try {
+        const fresh = await fetch(`https://www.googleapis.com/drive/v3/files/${existingId}?alt=media`, {
+          headers: { Authorization: 'Bearer ' + driveToken }
+        });
+        if (fresh.ok) {
+          const freshArr = await fresh.json();
+          if (Array.isArray(freshArr)) {
+            const freshMap = {};
+            freshArr.forEach(u => { freshMap[u.id] = u; });
+            // Lo fresco de Drive pisa la base vieja; lo nuestro (asignados de esta sesión) pisa lo fresco
+            const finalMap = { ...freshMap };
+            asignados.forEach(a => { finalMap[a.id] = updatesMap[a.id]; });
+            updates.length = 0;
+            updates.push(...Object.values(finalMap));
+          }
+        }
+      } catch(e) { /* si falla el re-chequeo, seguimos con lo que ya teníamos */ }
       await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`, {
         method: 'PATCH',
         headers: { Authorization: 'Bearer ' + driveToken, 'Content-Type': 'application/json' },
@@ -1200,6 +1225,7 @@ function guardarAvanceModal() {
   if (!currentModalId) return;
   const a = ALL.find(x => x.id === currentModalId);
   if (!a) return;
+  const estadoAntes = a.estado, respAntes = a.resp, pctAntes = a.pct;
   a.estado = document.getElementById('mEditEstado').value;
   a.pct = Number(document.getElementById('mEditPct').value);
   a.resp = document.getElementById('mEditResp').value;
@@ -1228,6 +1254,12 @@ function guardarAvanceModal() {
   a.obs_back = obsBackVal;
   a._editado = true; // marcar que el backoffice editó este frente
   a._updated = new Date().toISOString(); // timestamp para resolución de conflictos
+  // Log de auditoría — solo si algo relevante cambió
+  const cambios = [];
+  if (estadoAntes !== a.estado) cambios.push(`estado: "${estadoAntes||'-'}" → "${a.estado||'-'}"`);
+  if (respAntes !== a.resp) cambios.push(`resp: "${respAntes||'-'}" → "${a.resp||'-'}"`);
+  if (pctAntes !== a.pct) cambios.push(`avance: ${pctAntes}% → ${a.pct}%`);
+  if (cambios.length) logAudit(`Editó frente ${a.id}`, cambios.join(' · '));
   // Actualizar vista del modal
   document.getElementById('mPct').textContent = a.pct + '%';
   document.getElementById('mPbar').style.width = a.pct + '%';
@@ -2083,6 +2115,28 @@ function exportXLSXListado() {
   exportXLSX(datos, 'listado_frentes', 'Listado');
 }
 
+// CSV del Listado de frentes — mismas columnas que el Excel.
+// (El botón "↓ CSV" existía pero la función nunca estuvo implementada.)
+function exportCSV() {
+  if (!filtered || !filtered.length) { showToast('No hay frentes para exportar'); return; }
+  const esc = v => {
+    const s = String(v ?? '');
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const cols = ['ACRE','DIRECCIÓN','ALTURA','COMUNA','M²','INTERVENCIÓN','MATERIALIDAD','ESTADO','RESPONSABLE','%','F.PROG','F.APERTURA','F.HORMIGÓN','F.COLOCACIÓN','F.FIN','F.MEDICIÓN','PRIORITARIO','OBS.SUPERVISOR','OBS.GENERAL'];
+  const filas = filtered.map(a => [
+    a.id, a.dir, a.alt, a.com, a.area, a.interv, a.mat, a.estado, a.resp,
+    a.pct, a.f_prog||'', a.f_aper||'', a.f_horm||'', a.f_col||'',
+    a.f_fin||'', a.f_med||'', a.prio ? 'SÍ' : '', a.obs_back||'', a.obs_g||''
+  ].map(esc).join(','));
+  const csv = '\uFEFF' + cols.join(',') + '\n' + filas.join('\n'); // BOM para que Excel abra bien los acentos
+  const el = document.createElement('a');
+  el.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  el.download = 'listado_frentes.csv';
+  el.click();
+  showToast(`✓ CSV exportado — ${filtered.length} frentes`);
+}
+
 function exportXLSXParteActual() {
   const parteEl = document.getElementById('parteContent');
   if (!parteEl || !parteEl.querySelector('table')) { showToast('Generá el parte primero'); return; }
@@ -2345,7 +2399,126 @@ let driveFileId = localStorage.getItem('bo_drive_file_id') || null;
 let lastSyncTime = localStorage.getItem('bo_last_sync') || null;
 let pendingDriveAction = null; // 'publish' o 'sync'
 
+// IDs fijos de los 4 archivos/carpeta de los que depende todo el sistema.
+// Si alguno se borra o se mueve fuera del Drive compartido, todo falla en silencio
+// (cae al fallback por nombre, que puede no encontrar nada). Este chequeo avisa antes.
+const FIXED_DRIVE_IDS = {
+  'SYNC_UPDATES.json': '1YuC6L-G340iHYdkfDAli5gKxZZroOekT',
+  'ACRES_DATA.json':   '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h',
+  '01_VEREDAS (carpeta de fotos)': '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv',
+  'BO_USERS.json':     '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_',
+};
+
+async function chequearSaludDrive() {
+  if (!driveToken) return;
+  const caidos = [];
+  for (const [nombre, id] of Object.entries(FIXED_DRIVE_IDS)) {
+    try {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+      if (!r.ok) { caidos.push(nombre); continue; }
+      const d = await r.json();
+      if (d.trashed) caidos.push(nombre + ' (está en la papelera)');
+    } catch(e) { caidos.push(nombre + ' (sin conexión)'); }
+  }
+  if (caidos.length) {
+    updateSyncBar(`⚠ Archivo(s) de Drive con problema: ${caidos.join(', ')} — avisar a d.silva`, 'var(--accent)');
+    showToast('⚠ Uno o más archivos fijos de Drive no están accesibles. El sistema puede fallar en algunas funciones.');
+  }
+}
+
 function getDriveToken() { return driveToken; }
+
+// ─── LOG DE AUDITORÍA ────────────────────────────────────────────
+// Registro liviano de "quién cambió qué". Se guarda local al instante (no se
+// pierde aunque falle Drive) y se sube en batch cada vez que se sincroniza,
+// igual que SYNC_UPDATES.json, para no sumar llamadas extra a la API.
+const AUDIT_LOG_NAME = 'AUDIT_LOG.json';
+function logAudit(accion, detalle) {
+  try {
+    const cola = JSON.parse(localStorage.getItem('bo_audit_queue') || '[]');
+    cola.push({
+      ts: new Date().toISOString(),
+      user: currentBoUser?.nombre || '(sin sesión)',
+      accion, detalle,
+    });
+    localStorage.setItem('bo_audit_queue', JSON.stringify(cola));
+  } catch(e) { console.warn('logAudit:', e.message); }
+}
+async function flushAuditLog() {
+  if (!driveToken) return;
+  let cola = [];
+  try { cola = JSON.parse(localStorage.getItem('bo_audit_queue') || '[]'); } catch(e) {}
+  if (!cola.length) return;
+  try {
+    const q = `name='${AUDIT_LOG_NAME}' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    const sd = await sr.json();
+    const existId = sd.files?.[0]?.id;
+    let log = [];
+    if (existId) {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${existId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+      if (r.ok) { const arr = await r.json(); if (Array.isArray(arr)) log = arr; }
+    }
+    log.push(...cola);
+    // Tope de 5000 entradas para que el archivo no crezca sin límite
+    if (log.length > 5000) log = log.slice(log.length - 5000);
+    const meta = { name: AUDIT_LOG_NAME, mimeType: 'application/json' };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    form.append('file', new Blob([JSON.stringify(log)], { type: 'application/json' }));
+    const url = existId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existId}?uploadType=multipart`
+      : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+    await fetch(url, { method: existId ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + driveToken }, body: form });
+    localStorage.setItem('bo_audit_queue', '[]'); // ya se subió, vaciar la cola local
+  } catch(e) { console.warn('flushAuditLog:', e.message); /* la cola local queda intacta, se reintenta en el próximo sync */ }
+}
+async function verHistorial() {
+  if (!driveToken) { showToast('Conectate a Drive para ver el historial'); return; }
+  document.getElementById('hist-modal').style.display = 'flex';
+  document.getElementById('histLista').innerHTML = 'Cargando...';
+  try {
+    const q = `name='${AUDIT_LOG_NAME}' and trashed=false`;
+    const sr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    const sd = await sr.json();
+    const existId = sd.files?.[0]?.id;
+    let log = [];
+    if (existId) {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${existId}?alt=media`, {
+        headers: { Authorization: 'Bearer ' + driveToken }
+      });
+      if (r.ok) { const arr = await r.json(); if (Array.isArray(arr)) log = arr; }
+    }
+    // Sumar lo que todavía no se subió (cola local) para no mostrar historial incompleto
+    try { log = log.concat(JSON.parse(localStorage.getItem('bo_audit_queue') || '[]')); } catch(e) {}
+    window._histLog = log.sort((a,b) => new Date(b.ts) - new Date(a.ts));
+    renderHistorial();
+  } catch(e) {
+    document.getElementById('histLista').innerHTML = `<div style="color:var(--accent)">Error cargando historial: ${e.message}</div>`;
+  }
+}
+function renderHistorial() {
+  const q = (document.getElementById('histBuscar')?.value || '').toLowerCase();
+  const log = window._histLog || [];
+  const filtrado = q ? log.filter(l => JSON.stringify(l).toLowerCase().includes(q)) : log;
+  const el = document.getElementById('histLista');
+  if (!filtrado.length) { el.innerHTML = '<div style="color:var(--text3);padding:16px 0">Sin registros</div>'; return; }
+  el.innerHTML = filtrado.slice(0, 300).map(l => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span style="color:var(--text3)">${new Date(l.ts).toLocaleString('es-AR')}</span>
+      · <span style="font-weight:600">${l.user}</span>
+      · ${l.accion}
+      ${l.detalle ? `<div style="color:var(--text2);margin-top:2px">${l.detalle}</div>` : ''}
+    </div>`).join('');
+}
 
 // Extraer token de la URL si venimos de OAuth redirect
 function checkOAuthCallback() {
@@ -2361,7 +2534,7 @@ function checkOAuthCallback() {
       // Limpiar la URL
       history.replaceState(null, '', window.location.pathname);
       // Cargar permisos Drive en panel Responsables
-      setTimeout(() => { listarAccesosDrive(); loadBoUsersRemoto(); loadViajesDrive(); }, 500);
+      setTimeout(() => { listarAccesosDrive(); loadBoUsersRemoto(); loadViajesDrive(); chequearSaludDrive(); }, 500);
       // Ejecutar acción pendiente
       const action = sessionStorage.getItem('bo_pending_action');
       sessionStorage.removeItem('bo_pending_action');
@@ -2581,6 +2754,8 @@ async function sincronizarTodo() {
     await publicarAsignaciones(true);
     // PASO 4: Backup automático diario
     autoBackupDrive();
+    // PASO 5: Subir el log de auditoría pendiente (no bloquea el sync si falla)
+    flushAuditLog();
 
     lastSyncTime = new Date().toLocaleString('es-AR');
     localStorage.setItem('bo_last_sync', lastSyncTime);
@@ -3231,6 +3406,19 @@ function hormCfgEliminar(tipo, idx) {
 }
 
 // ─── SISTEMA DE USUARIOS ─────────────────────────────────────────
+// Las contraseñas se guardan hasheadas (SHA-256) en BO_USERS.json, que vive en
+// Drive con acceso compartido — antes se guardaban en texto plano y cualquiera
+// con acceso al archivo podía leerlas. Los usuarios con contraseña vieja (texto
+// plano) se migran solos al hash la primera vez que hacen login exitoso.
+async function hashPass(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return 'sha256:' + [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function verifyPass(plain, stored) {
+  if (!stored) return false;
+  if (stored.startsWith('sha256:')) return (await hashPass(plain)) === stored;
+  return stored === plain; // legacy en texto plano
+}
 let currentBoUser = null;
 const DEFAULT_USERS = [{ nombre: 'd.silva', rol: 'admin', pass: 'construmex2024' }];
 
@@ -3312,16 +3500,22 @@ async function loadBoUsersRemoto() {
   } catch(e) { console.warn('loadBoUsersRemoto:', e.message); }
 }
 
-function doLoginBack() {
+async function doLoginBack() {
   const user = document.getElementById('loginUser').value.trim().toLowerCase();
-  const pass = document.getElementById('loginPass').value;
+  const pass = document.getElementById('loginPass').value.trim();
   const errEl = document.getElementById('loginError');
   errEl.style.color = 'var(--accent)';
   if (!user || !pass) { errEl.style.display='block'; errEl.textContent='Ingresá usuario y contraseña'; return; }
   const users = getBoUsers();
-  const found = users.find(u => u.nombre.toLowerCase() === user && u.pass === pass.trim());
-  if (!found) { errEl.style.display='block'; errEl.textContent='Usuario o contraseña incorrectos'; return; }
+  const found = users.find(u => u.nombre.toLowerCase() === user);
+  const ok = found && await verifyPass(pass, found.pass);
+  if (!ok) { errEl.style.display='block'; errEl.textContent='Usuario o contraseña incorrectos'; return; }
   if (found.rol === 'inspector') { errEl.style.display='block'; errEl.textContent='Los inspectores usan la app móvil'; return; }
+  // Migración silenciosa: si la contraseña estaba en texto plano, guardarla hasheada
+  if (!found.pass.startsWith('sha256:')) {
+    found.pass = await hashPass(pass);
+    saveBoUsers(users);
+  }
   currentBoUser = found;
   sessionStorage.setItem('bo_current_user', JSON.stringify(found));
   document.getElementById('loginOverlay').style.display = 'none';
@@ -3377,7 +3571,7 @@ function toggleEjecutoresPanel() {
   }
 }
 
-function agregarUsuario() {
+async function agregarUsuario() {
   if (!currentBoUser || currentBoUser.rol !== 'admin') return;
   const nombre = document.getElementById('newUserName').value.trim().toLowerCase();
   const rol    = document.getElementById('newUserRol').value;
@@ -3398,8 +3592,9 @@ function agregarUsuario() {
     if (!ejecutores.length) { errEl.style.display='block'; errEl.textContent='Seleccioná al menos un ejecutor para el inspector'; return; }
   }
 
-  users.push({ nombre, rol, pass, ejecutores });
+  users.push({ nombre, rol, pass: await hashPass(pass), ejecutores });
   saveBoUsers(users);
+  logAudit('Agregó usuario', `${nombre} (${rol})`);
   document.getElementById('newUserName').value = '';
   document.getElementById('newUserPass').value = '';
   document.getElementById('newUserPass2').value = '';
@@ -3413,17 +3608,18 @@ function eliminarUsuario(nombre) {
   if (nombre === 'd.silva') { showToast('No se puede eliminar el administrador'); return; }
   if (!confirm(`¿Eliminar usuario "${nombre}"?`)) return;
   saveBoUsers(getBoUsers().filter(u => u.nombre !== nombre));
+  logAudit('Eliminó usuario', nombre);
   renderUsuarios();
   showToast(`Usuario ${nombre} eliminado`);
 }
 
-function cambiarPassUsuario(nombre) {
+async function cambiarPassUsuario(nombre) {
   if (!currentBoUser || currentBoUser.rol !== 'admin') return;
   const nueva = prompt(`Nueva contraseña para "${nombre}":`);
   if (!nueva || nueva.length < 4) { showToast('Contraseña mínimo 4 caracteres'); return; }
   const users = getBoUsers();
   const u = users.find(x => x.nombre === nombre);
-  if (u) { u.pass = nueva; saveBoUsers(users); showToast(`✓ Contraseña de ${nombre} actualizada`); }
+  if (u) { u.pass = await hashPass(nueva); saveBoUsers(users); logAudit('Cambió contraseña', nombre); showToast(`✓ Contraseña de ${nombre} actualizada`); }
 }
 
 function renderUsuarios() {
@@ -3514,12 +3710,7 @@ async function compartirDrive() {
   } catch(e) {}
 
   // IDs fijos de los archivos a compartir — incluye BO_USERS.json siempre
-  const archivosIds = [
-    '1YuC6L-G340iHYdkfDAli5gKxZZroOekT', // SYNC_UPDATES.json
-    '1S2tiwzVOhAo63ep7tunDGnn46Hi63l5h',  // ACRES_DATA.json
-    '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv',  // carpeta 01_VEREDAS
-    '15At6TnCFta8UfT7IWQgj17aw3MtPeC5_',  // BO_USERS.json
-  ];
+  const archivosIds = Object.values(FIXED_DRIVE_IDS);
 
   let ok = 0; const errors = [];
   for (const fileId of archivosIds) {
@@ -3896,6 +4087,23 @@ async function importarJSON(input) {
     <!-- Footer -->
     <div style="padding:10px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--text3);flex-shrink:0">
       Solo frentes EN EJECUCIÓN con 1%–75% de avance. Click en una fila para agregar.
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HISTORIAL DE AUDITORÍA -->
+<div id="hist-modal" style="display:none;position:fixed;inset:0;background:rgba(14,15,17,.85);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;width:680px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <div style="font-size:15px;font-weight:700;flex:1">📜 Historial de cambios</div>
+      <button onclick="document.getElementById('hist-modal').style.display='none'" style="background:transparent;border:none;color:var(--text3);font-size:18px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0">
+      <input id="histBuscar" class="form-input" placeholder="🔍 Buscar por acre, usuario o acción..." oninput="renderHistorial()">
+    </div>
+    <div id="histLista" style="overflow-y:auto;flex:1;font-size:12px;padding:8px 16px">Cargando...</div>
+    <div style="padding:8px 16px;border-top:1px solid var(--line);font-size:10.5px;color:var(--text3);flex-shrink:0">
+      Se muestran los últimos 300 registros. El historial completo queda en AUDIT_LOG.json en Drive.
     </div>
   </div>
 </div>

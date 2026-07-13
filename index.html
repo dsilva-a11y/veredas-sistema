@@ -1492,7 +1492,18 @@ function getAppUsers() {
   ];
 }
 
-function doLogin() {
+// Mismo esquema de hash que el backoffice (BO_USERS.json es compartido entre ambos)
+async function hashPass(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return 'sha256:' + [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function verifyPass(plain, stored) {
+  if (!stored) return false;
+  if (stored.startsWith('sha256:')) return (await hashPass(plain)) === stored;
+  return stored === plain; // legacy en texto plano
+}
+
+async function doLogin() {
   const nombre = document.getElementById('loginNombre').value.trim().toLowerCase();
   const pass   = document.getElementById('loginClave').value.trim();
   const errEl  = document.getElementById('loginError');
@@ -1503,13 +1514,13 @@ function doLogin() {
   }
 
   const users = getAppUsers();
-  const found = users.find(u => u.nombre.toLowerCase() === nombre && u.pass === pass);
+  const found = users.find(u => u.nombre.toLowerCase() === nombre);
+  const ok = found && await verifyPass(pass, found.pass);
 
-  if (!found) {
+  if (!ok) {
     // Intentar con la clave legacy CONSTRUMEX2026 para ejecutores
-    const legacy = users.find(u => u.nombre.toLowerCase() === nombre);
-    if (legacy && pass === 'CONSTRUMEX2026') {
-      doLoginSuccess(legacy); return;
+    if (found && pass === 'CONSTRUMEX2026') {
+      doLoginSuccess(found); return;
     }
     errEl.textContent = 'Usuario o contraseña incorrectos';
     errEl.style.display = 'block'; return;
