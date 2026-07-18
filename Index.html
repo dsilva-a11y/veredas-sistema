@@ -2648,7 +2648,10 @@ async function downloadDataFile(token, fileId) {
 
 // Fusionar cambios del JSON de Drive sobre ALL (solo campos operativos)
 function mergeAcresData(updates) {
-  const CAMPOS = ['estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
+  // Incluye los campos descriptivos (dir/alt/com/area/interv/mat): antes solo viajaban los
+  // operativos, así que una corrección de dirección o área hecha por un supervisor nunca
+  // le llegaba a los demás backoffices.
+  const CAMPOS = ['estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med','dir','alt','com','area','interv','mat'];
   let count = 0;
   const idx = {};
   ALL.forEach((a,i) => idx[a.id] = i);
@@ -2667,6 +2670,18 @@ function mergeAcresData(updates) {
       if (u.pct !== undefined) a.pct = Number(u.pct);
       if (u._updated !== undefined) a._updated = u._updated;
       a._editado = false;
+      count++;
+    } else if (u.id && u.dir) {
+      // Frente que este backoffice no conoce (ej: agregado por el admin en otra compu y
+      // publicado vía sync). Antes se salteaba en silencio y las bases divergían.
+      // Es seguro agregarlo: en este sistema los frentes nunca se borran, se anulan.
+      const nuevo = { id: u.id };
+      ['dir','alt','com','area','interv','mat', ...CAMPOS].forEach(f => { if (u[f] !== undefined) nuevo[f] = u[f]; });
+      if (u.pct !== undefined) nuevo.pct = Number(u.pct);
+      nuevo._updated = u._updated || null;
+      nuevo._editado = false;
+      ALL.push(nuevo);
+      idx[u.id] = ALL.length - 1;
       count++;
     }
   }
@@ -2695,6 +2710,58 @@ function updateSyncBar(msg, color) {
 // Sincronización completa: baja datos de inspectores + publica cambios del backoffice
 let _importacionPendiente = false; // flag cuando se importó la Planilla Madre o JSON
 
+// ─── REFRESCO DE BASE POR VERSIÓN ─────────────────────────────────
+// Guarda el modifiedTime de ACRES_DATA.json en Drive al momento de bajarlo/publicarlo.
+async function registrarVersionBaseLocal() {
+  try {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_DATA_ID}?fields=modifiedTime`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.modifiedTime) localStorage.setItem('bo_acres_version', d.modifiedTime);
+    }
+  } catch(e) { /* no crítico */ }
+}
+
+// Si ACRES_DATA.json en Drive es más nuevo que la última versión que este navegador bajó,
+// re-descarga la base completa y la fusiona preservando las ediciones locales sin publicar.
+async function refrescarBaseSiHayVersionNueva() {
+  try {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_DATA_ID}?fields=modifiedTime`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    if (!r.ok) return;
+    const meta = await r.json();
+    const versionDrive = meta.modifiedTime || null;
+    const versionLocal = localStorage.getItem('bo_acres_version') || null;
+    if (!versionDrive || versionDrive === versionLocal) return; // ya estamos al día
+
+    updateSyncBar('Base actualizada en Drive — descargando versión nueva...', 'var(--yellow)');
+    const rd = await fetch(`https://www.googleapis.com/drive/v3/files/${FIXED_ACRES_DATA_ID}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + driveToken }
+    });
+    if (!rd.ok) return;
+    const base = await rd.json();
+    if (!Array.isArray(base) || !base.length) return; // base vacía o corrupta: no pisar lo local
+
+    // Preservar las ediciones locales que todavía no se publicaron
+    const pendientes = {};
+    ALL.forEach(a => { if (a._editado === true) pendientes[a.id] = a; });
+
+    ALL.length = 0;
+    base.forEach(f => ALL.push(pendientes[f.id] ? pendientes[f.id] : f));
+    // Ediciones locales sobre frentes que ya no están en la base nueva: conservarlas igual
+    Object.values(pendientes).forEach(p => { if (!ALL.find(a => a.id === p.id)) ALL.push(p); });
+
+    saveData();
+    localStorage.setItem('bo_acres_version', versionDrive);
+    renderTable(); applyFilters();
+    const nPend = Object.keys(pendientes).length;
+    updateSyncBar(`✓ Base actualizada desde Drive (${base.length} frentes${nPend ? `, ${nPend} ediciones locales preservadas` : ''})`, 'var(--green)');
+  } catch(e) { console.warn('refrescarBase:', e.message); }
+}
+
 async function sincronizarTodo() {
   if (!driveToken) { loginDrive('sync'); return; }
   updateSyncBar('Sincronizando...', 'var(--yellow)');
@@ -2712,6 +2779,7 @@ async function sincronizarTodo() {
             ALL.length = 0;
             data.forEach(f => ALL.push(f));
             saveData();
+            await registrarVersionBaseLocal();
             renderTable(); applyFilters(); initDash(); initCert();
             const S2=calcStats();
             document.getElementById('nb-total').textContent=S2.frtot;
@@ -2723,6 +2791,14 @@ async function sincronizarTodo() {
           }
         }
       } catch(e) { console.warn('Error bajando base:', e.message); }
+    } else if (!_importacionPendiente) {
+      // PASO 0: Refresco de base por versión — LA CLAVE para que todos los backoffices vean lo mismo.
+      // Antes, la base completa solo se bajaba con ALL vacío (primera vez); después cada navegador
+      // vivía de su localStorage para siempre y las copias divergían: frentes nuevos importados por
+      // el admin nunca llegaban a los demás supervisores, ni las correcciones de dirección/área/etc.
+      // (Se saltea si hay una importación local pendiente: en ese caso lo local ES lo más nuevo
+      //  y el PASO 1 lo publica a Drive; bajar la base acá la pisaría.)
+      await refrescarBaseSiHayVersionNueva();
     }
     // PASO 1: Si hay importación masiva pendiente, publicar la base completa primero
     // Esto garantiza que la importación no sea pisada por los datos de Drive
@@ -2732,6 +2808,7 @@ async function sincronizarTodo() {
       const existingId = await findDataFile(driveToken, folderId);
       const content = JSON.stringify(exportAcresData(), null, 0);
       await uploadDataFile(driveToken, folderId, content, existingId);
+      await registrarVersionBaseLocal();
       _importacionPendiente = false;
       updateSyncBar('Base publicada. Bajando avances de inspectores...', 'var(--yellow)');
     }
@@ -2821,6 +2898,7 @@ async function publicarBaseCompleta() {
     const existingId = await findDataFile(driveToken, folderId);
     const content = JSON.stringify(exportAcresData(), null, 0);
     await uploadDataFile(driveToken, folderId, content, existingId);
+    await registrarVersionBaseLocal(); // esta compu queda marcada como al día con lo que acaba de subir
     // También publicar SYNC_UPDATES con el estado actual para que la app lo reciba
     await publicarAsignaciones(true);
     _importacionPendiente = false;
