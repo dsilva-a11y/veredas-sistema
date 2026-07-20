@@ -988,7 +988,7 @@ function fillAsigSelects() {
     const sel = document.getElementById(id);
     if (!sel) return;
     const first = id === 'asigResp' ? '<option value="">Todos los responsables</option>' : '<option value="">— Responsable —</option>';
-    sel.innerHTML = first + RESPS.map(r => `<option value="${r.nombre}">${r.nombre}</option>`).join('');
+    sel.innerHTML = first + responsablesUnificados().map(n => `<option value="${n}">${n}</option>`).join('');
   });
 }
 
@@ -1292,6 +1292,46 @@ let RESPS=loadResps();
 function hashCode(s){let h=0;for(let c of s)h=Math.imul(31,h)+c.charCodeAt(0)|0;return h;}
 function respColor(n){const r=RESPS.find(x=>x.nombre===n||x.id===n);return r?r.color:RESP_COLORS[Math.abs(hashCode(n||''))%RESP_COLORS.length];}
 
+// ─── CLASIFICACIÓN CENTRAL (única fuente de verdad) ───────────────
+// Todos los contadores, filtros, dashboard y certificación derivan el "grupo operativo"
+// de un frente desde ESTA función. Antes cada vista clasificaba por su cuenta —unas por
+// el campo `estado`, otras por el `pct`— y cuando esos dos no coincidían (la app sube el
+// pct pero el estado textual queda viejo), los números discrepaban entre vistas y entre
+// usuarios. El pct es la fuente de verdad porque es lo que efectivamente reporta el inspector.
+// Devuelve uno de: 'ANULADA' | 'EJECUTADO' | 'EN EJECUCION' | 'A EJECUTAR'
+function clasificarFrente(a){
+  const e = (a.estado||'').toUpperCase();
+  if(e==='ANULADA') return 'ANULADA';
+  const pct = Number(a.pct||0);
+  if(e==='EJECUTADO' || pct>=100) return 'EJECUTADO';
+  if(pct>=2 && pct<100) return 'EN EJECUCION';   // 25 / 50 / 75 / 98
+  return 'A EJECUTAR';                            // 0% y 1% (programado p/ apertura)
+}
+
+// Normaliza el campo `estado` guardado para que coincida con la clasificación real (por pct).
+// Corre automáticamente antes de publicar, así los Excel y la base quedan prolijos y consistentes
+// entre todos los usuarios. NO toca frentes ANULADA (la anulación es una decisión manual que
+// gana siempre) ni pisa nada más: solo reescribe el texto del estado cuando quedó desalineado.
+// Marca _editado + _updated en los que cambia, para que la corrección se propague por sync.
+// Devuelve la cantidad de frentes corregidos.
+function normalizarEstados(marcarParaSync = true){
+  let n = 0;
+  ALL.forEach(a => {
+    if ((a.estado||'').toUpperCase() === 'ANULADA') return; // los anulados no se tocan
+    const canonico = clasificarFrente(a);
+    if ((a.estado||'') !== canonico) {
+      a.estado = canonico;
+      if (marcarParaSync) {
+        a._editado = true;
+        a._updated = new Date().toISOString();
+      }
+      n++;
+    }
+  });
+  if (n > 0) saveData();
+  return n;
+}
+
 // ─── STATS ────────────────────────────────────────────────────────
 function calcStats(){
   const r={m2ej:0,m2ei:0,m2ae:0,m2tot:0,frej:0,frei:0,frae:0,fran:0,frtot:0,estados:{},resps:{},comunas:{},mats:{}};
@@ -1299,14 +1339,14 @@ function calcStats(){
     const m2=a.area||0, e=a.estado||'-', pct=Number(a.pct||0);
     r.m2tot+=m2; r.frtot++;
     r.estados[e]=(r.estados[e]||0)+m2;
-    if(e==='ANULADA'){ r.fran++; return; }
-    // Usar pct real para clasificar (igual que la certificación)
-    if(e==='EJECUTADO'||pct>=100){ r.m2ej+=m2; r.frej++; }
-    else if(pct>=2 && pct<100){ r.m2ei+=m2; r.frei++; }  // EN EJECUCION: 25/50/75/98%
-    else { r.m2ae+=m2; r.frae++; }                         // A ejecutar: 0% y 1%
+    const grupo=clasificarFrente(a);
+    if(grupo==='ANULADA'){ r.fran++; return; }
+    if(grupo==='EJECUTADO'){ r.m2ej+=m2; r.frej++; }
+    else if(grupo==='EN EJECUCION'){ r.m2ei+=m2; r.frei++; }
+    else { r.m2ae+=m2; r.frae++; }
     const rp=a.resp||'Sin asignar';
     if(!r.resps[rp])r.resps[rp]={total:0,ej:0};
-    r.resps[rp].total+=m2; if(e==='EJECUTADO'||pct>=100)r.resps[rp].ej+=m2;
+    r.resps[rp].total+=m2; if(grupo==='EJECUTADO')r.resps[rp].ej+=m2;
     const cm=String(a.com||'?'); r.comunas[cm]=(r.comunas[cm]||0)+m2;
     const mt=a.mat||'SIN DATO'; r.mats[mt]=(r.mats[mt]||0)+m2;
   });
@@ -1696,7 +1736,7 @@ function initMapa() {
   }
   // Llenar select responsables
   const sel = document.getElementById('mapaResp');
-  if (sel) sel.innerHTML = '<option value="">Todos los resp.</option>' + RESPS.map(r => `<option value="${r.nombre}">${r.nombre}</option>`).join('');
+  if (sel) sel.innerHTML = '<option value="">Todos los resp.</option>' + responsablesUnificados().map(n => `<option value="${n}">${n}</option>`).join('');
 
   document.getElementById('mapaLoader').style.display = 'none';
   setTimeout(() => { mapaInstance.invalidateSize(); renderMapa(); }, 200);
@@ -1847,9 +1887,9 @@ function renderCert(){
 
   // Resumen por etapa — universo completo: pendientes + en ejecución + ejecutados sin medir + medidos en el mes
   // Excluidos: ANULADA
-  const pendientes   = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-') && Number(a.pct)===0);
-  const programados  = ALL.filter(a=>a.estado!=='ANULADA' && a.estado!=='EJECUTADO' && (a.estado==='A EJECUTAR' || a.estado==='-') && Number(a.pct)===1);
-  const enEjecucion  = ALL.filter(a=>a.estado==='EN EJECUCION' && a.pct>0 && a.pct<100);
+  const pendientes   = ALL.filter(a=>clasificarFrente(a)==='A EJECUTAR' && Number(a.pct)===0);
+  const programados  = ALL.filter(a=>clasificarFrente(a)==='A EJECUTAR' && Number(a.pct)===1);
+  const enEjecucion  = ALL.filter(a=>clasificarFrente(a)==='EN EJECUCION');
   // sinMed y medMes ya están calculados arriba
   const certEtapaFrentes=[...pendientes,...programados,...enEjecucion,...sinMed,...medMes];
   const m2CertTotal=certEtapaFrentes.reduce((s,a)=>s+(a.area||0),0);
@@ -1961,7 +2001,7 @@ function initDash(){
       // Mostrar frentes activos en ese mes (ejecutados en ese mes o en ejecución)
       if(a.f_fin && a.f_fin.startsWith(periodo)) return true;
       if(a.f_med && a.f_med.startsWith(periodo)) return true;
-      if(a.estado==='EN EJECUCION') return true;
+      if(clasificarFrente(a)==='EN EJECUCION') return true;
       return false;
     });
     const [y,mo]=periodo.split('-');
@@ -1973,18 +2013,19 @@ function initDash(){
     if(infoEl) infoEl.textContent=`${ALL.length} frentes totales`;
   }
   // Recalcular stats para el subset
-  const Sp={m2ej:0,m2ei:0,m2ae:0,m2tot:0,frej:0,frei:0,frae:0,fran:0,estados:{},resps:{},comunas:{},mats:{}};
+  const Sp={m2ej:0,m2ei:0,m2ae:0,m2tot:0,frej:0,frei:0,frae:0,fran:0,frtot:0,estados:{},resps:{},comunas:{},mats:{}};
   data.forEach(a=>{
-    const m2=a.area||0,e=a.estado||'-',pct=Number(a.pct||0);
-    Sp.m2tot+=m2;
+    const m2=a.area||0,e=a.estado||'-';
+    Sp.m2tot+=m2; Sp.frtot++;
     Sp.estados[e]=(Sp.estados[e]||0)+m2;
-    if(e==='ANULADA'){Sp.fran++;return;}
-    if(e==='EJECUTADO'||pct>=100){Sp.m2ej+=m2;Sp.frej++;}
-    else if(pct>=2&&pct<100){Sp.m2ei+=m2;Sp.frei++;}
+    const grupo=clasificarFrente(a);
+    if(grupo==='ANULADA'){Sp.fran++;return;}
+    if(grupo==='EJECUTADO'){Sp.m2ej+=m2;Sp.frej++;}
+    else if(grupo==='EN EJECUCION'){Sp.m2ei+=m2;Sp.frei++;}
     else{Sp.m2ae+=m2;Sp.frae++;}
     const rp=a.resp||'Sin asignar';
     if(!Sp.resps[rp])Sp.resps[rp]={total:0,ej:0};
-    Sp.resps[rp].total+=m2;if(e==='EJECUTADO'||pct>=100)Sp.resps[rp].ej+=m2;
+    Sp.resps[rp].total+=m2;if(grupo==='EJECUTADO')Sp.resps[rp].ej+=m2;
     const cm=String(a.com||'?');Sp.comunas[cm]=(Sp.comunas[cm]||0)+m2;
     const mt=a.mat||'SIN DATO';Sp.mats[mt]=(Sp.mats[mt]||0)+m2;
   });
@@ -2045,12 +2086,9 @@ let fEv='',fRv='',fCv='',fMv='',searchV='';
 function applyFilters(){
   filtered=ALL.filter(a=>{
     if(fEv){
-      // "A EJECUTAR" agrupa también estado '-' (sin iniciar)
-      if(fEv==='A EJECUTAR'){
-        if(a.estado!=='A EJECUTAR'&&a.estado!=='-')return false;
-      } else {
-        if(a.estado!==fEv)return false;
-      }
+      // Clasificación central: el filtro por estado usa el MISMO criterio que los
+      // contadores del sidebar (deriva del pct), no el campo `estado` literal.
+      if(clasificarFrente(a)!==fEv)return false;
     }
     if(fRv&&(a.resp||'')!==fRv)return false;
     if(fCv&&String(a.com||'')!==fCv)return false;
@@ -2087,7 +2125,24 @@ function clearF(){fEv=fRv=fCv=fMv=searchV='';['searchBox','fEstado','fResp','fCo
 function qf(estado,el){fEv=estado;fRv='';fCv='';fMv='';searchV='';document.getElementById('fEstado').value=estado;goTo('lista',null);document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));if(el)el.classList.add('active');applyFilters();}
 function fillMatSelect(){const mats=[...new Set(ALL.map(a=>a.mat).filter(Boolean))].sort();const sel=document.getElementById('fMat');sel.innerHTML='<option value="">Todas las materialidades</option>';mats.forEach(m=>sel.innerHTML+=`<option value="${m}">${m}</option>`);}
 function fillComSelect(){const coms=[...new Set(ALL.map(a=>String(a.com||'')).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));const sel=document.getElementById('fComuna');sel.innerHTML='<option value="">Todas las comunas</option>';coms.forEach(c=>sel.innerHTML+=`<option value="${c}">Comuna ${c}</option>`);}
-function fillRespSelect(){const sel=document.getElementById('fResp');sel.innerHTML='<option value="">Todos los responsables</option>';RESPS.forEach(r=>sel.innerHTML+=`<option value="${r.nombre}">${r.nombre}</option>`);}
+// Lista de responsables unificada: combina los definidos localmente (RESPS) con TODOS
+// los que aparecen realmente asignados en los frentes (ALL). Como ALL sí se sincroniza
+// por Drive, esto garantiza que todos los usuarios vean el mismo conjunto de responsables,
+// aunque cada navegador tenga una lista local `veredas_resps` distinta.
+function responsablesUnificados(){
+  const set = new Set();
+  RESPS.forEach(r => { if(r && r.nombre) set.add(r.nombre); });
+  ALL.forEach(a => { if(a.resp && a.resp.trim()) set.add(a.resp.trim()); });
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function fillRespSelect(){
+  const sel=document.getElementById('fResp');
+  if(!sel) return;
+  const val=sel.value;
+  sel.innerHTML='<option value="">Todos los responsables</option>'
+    + responsablesUnificados().map(n=>`<option value="${n}">${n}</option>`).join('');
+  sel.value=val; // preservar la selección actual al repoblar
+}
 // ─── EXPORTACIÓN EXCEL ───────────────────────────────────────────
 function exportXLSX(datos, nombreArchivo, nombreHoja) {
   const wb = XLSX.utils.book_new();
@@ -2225,7 +2280,7 @@ function openModal(id){
   document.getElementById('mMat').textContent=a.mat||'—';
   // Poblar selects de edición
   const selResp = document.getElementById('mEditResp');
-  selResp.innerHTML = '<option value="">Sin asignar</option>' + RESPS.map(r=>`<option value="${r.nombre}">${r.nombre}</option>`).join('');
+  selResp.innerHTML = '<option value="">Sin asignar</option>' + responsablesUnificados().map(n=>`<option value="${n}">${n}</option>`).join('');
   document.getElementById('mEditEstado').value = a.estado || '-';
   document.getElementById('mEditPct').value = String(a.pct ?? 0);
   selResp.value = a.resp || '';
@@ -2778,6 +2833,7 @@ async function sincronizarTodo() {
           if (Array.isArray(data) && data.length) {
             ALL.length = 0;
             data.forEach(f => ALL.push(f));
+            normalizarEstados(true); // dejar la base prolija desde la primera carga
             saveData();
             await registrarVersionBaseLocal();
             renderTable(); applyFilters(); initDash(); initCert();
@@ -2825,6 +2881,15 @@ async function sincronizarTodo() {
         const updates = await r.json();
         count = mergeAcresData(Array.isArray(updates) ? updates : []);
       }
+    }
+
+    // PASO 2.5: Normalizar el campo `estado` según el pct real (auto, silencioso).
+    // Deja la base prolija para los Excel y consistente entre todos los usuarios.
+    // Corre después de fusionar los avances de la app (así corrige también lo recién bajado)
+    // y antes de publicar (así las correcciones viajan a Drive en este mismo sync).
+    const normalizados = normalizarEstados(true);
+    if (normalizados > 0) {
+      logAudit('Normalización automática de estados', `${normalizados} frentes alineados al % real`);
     }
 
     // PASO 3: Publicar asignaciones y ediciones del backoffice
