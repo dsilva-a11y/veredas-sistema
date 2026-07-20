@@ -1205,7 +1205,7 @@ async function importarExcel(input) {
     });
     result.innerHTML = `<span style="color:var(--green)">✓ ${added} frentes nuevos agregados · ${updated} actualizados · ${errors} errores</span>`;
     saveData();
-    renderTable();
+    applyFilters(); actualizarBadges(); initDash(); initCert();
     // Igual que la Planilla Madre: marcar pendiente para que la próxima "Sincronizar" publique en Drive
     if (added + updated > 0) {
       _importacionPendiente = true;
@@ -1268,8 +1268,8 @@ function guardarAvanceModal() {
   document.getElementById('mBadge').className = 'bd ' + badgeClass(a.estado);
   saveData();
   showToast('✓ ' + a.id + ' actualizado — publicá para sincronizar');
-  renderTable();
   applyFilters();
+  actualizarBadges();
 }
 
 // ─── RESPONSABLES ─────────────────────────────────────────────────
@@ -1352,18 +1352,23 @@ function calcStats(){
   });
   return r;
 }
-const S=calcStats();
-
 // ─── SIDEBAR BADGES ───────────────────────────────────────────────
-document.getElementById('nb-total').textContent=S.frtot;
-document.getElementById('nb-ei').textContent=S.frei;
-document.getElementById('nb-ae').textContent=S.frae;
-document.getElementById('nb-ej').textContent=S.frej;
-document.getElementById('nb-an').textContent=S.fran;
-// Badge de sin asignar (excluye ejecutados y anulados)
-const sinAsig = ALL.filter(a => !a.resp && a.estado !== 'EJECUTADO' && a.estado !== 'ANULADA').length;
-const nbSinAsig = document.getElementById('nb-sin-asig');
-if (nbSinAsig) nbSinAsig.textContent = sinAsig;
+// Recalcula los contadores de la izquierda desde ALL. Debe llamarse cada vez que
+// ALL cambia (importar base, sincronizar, refrescar desde Drive, editar), si no
+// los badges quedan con el número viejo mientras la base ya cambió.
+function actualizarBadges(){
+  const St = calcStats();
+  const set = (id,v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
+  set('nb-total', St.frtot);
+  set('nb-ei', St.frei);
+  set('nb-ae', St.frae);
+  set('nb-ej', St.frej);
+  set('nb-an', St.fran);
+  const sinAsig = ALL.filter(a => !a.resp && clasificarFrente(a) !== 'EJECUTADO' && clasificarFrente(a) !== 'ANULADA').length;
+  set('nb-sin-asig', sinAsig);
+  return St;
+}
+const S = actualizarBadges();
 
 // ─── CERT PANELS COLAPSABLES ─────────────────────────────────────
 function toggleCertPanel(id) {
@@ -2811,7 +2816,7 @@ async function refrescarBaseSiHayVersionNueva() {
 
     saveData();
     localStorage.setItem('bo_acres_version', versionDrive);
-    renderTable(); applyFilters();
+    renderTable(); applyFilters(); actualizarBadges(); initDash(); initCert();
     const nPend = Object.keys(pendientes).length;
     updateSyncBar(`✓ Base actualizada desde Drive (${base.length} frentes${nPend ? `, ${nPend} ediciones locales preservadas` : ''})`, 'var(--green)');
   } catch(e) { console.warn('refrescarBase:', e.message); }
@@ -2837,12 +2842,7 @@ async function sincronizarTodo() {
             saveData();
             await registrarVersionBaseLocal();
             renderTable(); applyFilters(); initDash(); initCert();
-            const S2=calcStats();
-            document.getElementById('nb-total').textContent=S2.frtot;
-            document.getElementById('nb-ei').textContent=S2.frei;
-            document.getElementById('nb-ae').textContent=S2.frae;
-            document.getElementById('nb-ej').textContent=S2.frej;
-            document.getElementById('nb-an').textContent=S2.fran;
+            actualizarBadges();
             updateSyncBar(`✓ ${data.length} frentes cargados — continuando sync...`, 'var(--green)');
           }
         }
@@ -2905,6 +2905,7 @@ async function sincronizarTodo() {
     showToast(`Sync completo — ${count} avances de la app sincronizados`);
 
     // Refrescar vista activa
+    actualizarBadges();
     const activePage = document.querySelector('.page.active');
     if (activePage) {
       const pid = activePage.id.replace('page-','');
@@ -4105,7 +4106,7 @@ async function importarPlanillaMadre(input) {
     }
 
     // Refrescar UI
-    renderTable(); applyFilters(); initDash(); initCert();
+    renderTable(); applyFilters(); initDash(); initCert(); actualizarBadges();
     _importacionPendiente = true; // la próxima sincronización publica la base antes de bajar
     updateSyncBar(`⚠ Importación lista (${actualizados + nuevos} frentes) — Sincronizá para publicar en Drive`, 'var(--yellow)');
 
@@ -4199,6 +4200,7 @@ async function importarJSON(input) {
     }
     renderTable(); applyFilters();
     if(ALL.length){ initDash(); initCert(); }
+    actualizarBadges();
     saveData();
     _importacionPendiente = true;
     result.innerHTML = `<span style="color:var(--green)">✅ ${act} actualizados · ${new_} nuevos — ${ALL.length} frentes en total. Presioná <strong>🔄 Sincronizar</strong> para publicar en Drive.</span>`;
