@@ -577,28 +577,66 @@ function getDriveToken() {
 // Todas las fotos de todos los inspectores van a esta carpeta
 const FIXED_VEREDAS_FOLDER_ID = '1nX3-oxczY5Mf_l_Y2s4ykjpbALHLs3Yv';
 
+// Cache de carpetas ya resueltas en esta sesión (nombre+parent -> id).
+// Evita re-buscar la misma carpeta muchas veces y, sobre todo, evita que dos
+// subidas del mismo acre creen dos carpetas distintas por no verse entre sí.
+const _folderCache = {};
+
+// Escapa comillas simples para las queries de Drive (nombres como "O'Higgins"
+// rompían la query y hacían que la carpeta "no se encontrara" -> se duplicaba).
+function escapeDriveQuery(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+// fetch con reintentos: un "Failed to fetch" puntual por red no debe traducirse
+// en "la carpeta no existe" (que llevaba a crear duplicados).
+async function fetchConReintento(url, opts, intentos = 3) {
+  let ultimoError;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      const res = await fetch(url, opts);
+      if (res.ok || (res.status >= 400 && res.status < 500 && res.status !== 429)) return res;
+      ultimoError = new Error('HTTP ' + res.status);
+    } catch (e) {
+      ultimoError = e; // típicamente "Failed to fetch" por red intermitente
+    }
+    await new Promise(r => setTimeout(r, 400 * (i + 1))); // backoff: 400ms, 800ms, 1200ms
+  }
+  throw ultimoError || new Error('fetch falló tras ' + intentos + ' intentos');
+}
+
 async function ensureDriveFolder(path, token) {
   const parts = path.split('/').filter(Boolean);
   // Saltear la primera parte (01_VEREDAS) y usar el ID fijo directamente
   let parentId = FIXED_VEREDAS_FOLDER_ID;
   const subParts = parts.length > 1 ? parts.slice(1) : parts;
   for (const part of subParts) {
-    const searchRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(part)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+    const cacheKey = parentId + '/' + part;
+    if (_folderCache[cacheKey]) { parentId = _folderCache[cacheKey]; continue; }
+
+    // Buscar carpeta existente (con reintentos y escapando el nombre).
+    // Pide varios resultados ordenados por fecha de creación para, si hay duplicados,
+    // usar SIEMPRE la más vieja (la original) de forma consistente entre todos.
+    const q = `name='${escapeDriveQuery(part)}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const searchRes = await fetchConReintento(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,createdTime)&orderBy=createdTime&pageSize=10`,
       { headers: { Authorization: 'Bearer ' + token } }
     );
     const searchData = await searchRes.json();
+
     if (searchData.files && searchData.files.length > 0) {
-      parentId = searchData.files[0].id;
+      parentId = searchData.files[0].id; // la más vieja
     } else {
-      const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+      // No existe: crearla. Como la búsqueda ya pasó con reintentos, un vacío acá es
+      // confiable, no un falso negativo por red.
+      const createRes = await fetchConReintento('https://www.googleapis.com/drive/v3/files', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: part, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }),
       });
       const createData = await createRes.json();
+      if (!createData.id) throw new Error('No se pudo crear la carpeta ' + part);
       parentId = createData.id;
     }
+    _folderCache[cacheKey] = parentId;
   }
   return parentId;
 }
@@ -723,7 +761,34 @@ async function actualizarBitacora(p, acreFolder, token) {
 }
 
 // Sincronizar todas las fotos pendientes a Drive
+// Lock global: garantiza que NUNCA corran dos subidas a la vez. Sin esto, la subida
+// automática y una llamada manual (o dos automáticas encimadas) podían crear la misma
+// carpeta en paralelo y duplicarla en Drive. Si ya hay una corriendo, la nueva llamada
+// espera a que termine en vez de arrancar en paralelo.
+let _syncEnCurso = false;
+let _syncPendienteOtra = false;
+
 async function syncToDrive() {
+  if (_syncEnCurso) {
+    // Ya hay una sincronización en curso: marcar que quedó trabajo nuevo y salir.
+    // Al terminar la actual, se vuelve a correr una vez para tomar lo que llegó.
+    _syncPendienteOtra = true;
+    return;
+  }
+  _syncEnCurso = true;
+  try {
+    await _syncToDriveInterno();
+  } finally {
+    _syncEnCurso = false;
+    if (_syncPendienteOtra) {
+      _syncPendienteOtra = false;
+      // Reintentar una sola vez para lo que haya entrado mientras corría
+      setTimeout(() => syncToDrive(), 500);
+    }
+  }
+}
+
+async function _syncToDriveInterno() {
   let token = getDriveToken();
   if (!token) {
     try {
@@ -738,7 +803,6 @@ async function syncToDrive() {
   const sinSync = pendientes.filter(p => !p.sincronizado);
 
   if (sinSync.length === 0) {
-    showToast('No hay relevamientos pendientes de sincronizar');
     updateConnBanner();
     leerAsignacionesDrive();
     renderSync();
@@ -1157,8 +1221,23 @@ window.addEventListener('load', () => {
     // Leer asignaciones del backoffice automáticamente
     // Actualizar base completa al conectar Drive (para todos los ejecutores)
     setTimeout(() => leerAsignacionesDrive(), 500);
+    // Subir automáticamente lo que haya quedado pendiente de la sesión anterior
+    setTimeout(() => { if (hayPendientes()) syncToDrive(); }, 1500);
   }
 });
+
+// Cuando vuelve internet (el inspector recupera señal en la calle), subir lo pendiente solo.
+window.addEventListener('online', () => {
+  if (getDriveToken() && hayPendientes()) {
+    setTimeout(() => syncToDrive(), 1000);
+  }
+});
+
+// ¿Hay relevamientos sin subir?
+function hayPendientes() {
+  try { return DB.get('pendientes', []).some(p => !p.sincronizado); }
+  catch(e) { return false; }
+}
 
 // Bajar la base completa de frentes desde ACRES_DATA.json
 async function cargarBaseCompletaDrive(token, forzar=false) {
@@ -2463,10 +2542,27 @@ async function renderSync() {
     html += `</div>`;
   }
 
-  html += `<div style="padding:0 16px 24px; display:flex; flex-direction:column; gap:10px;">
-    <button class="btn-main" onclick="trySync()">${CONFIG.DRIVE_CONNECTED ? '↻ Sincronizar ahora' : '☁️ Conectar Google Drive'}</button>
-    ${CONFIG.DRIVE_CONNECTED ? `<button style="padding:12px;background:var(--bg2);border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer" onclick="actualizarAsignaciones()">📥 Actualizar mis asignaciones</button>` : ''}
-  </div>`;
+  const hayPend = pend.length > 0;
+  html += `<div style="padding:0 16px 24px; display:flex; flex-direction:column; gap:10px;">`;
+  if (!CONFIG.DRIVE_CONNECTED) {
+    html += `<button class="btn-main" onclick="trySync()">☁️ Conectar Google Drive</button>`;
+  } else {
+    // Drive conectado: la subida es automática. Mostramos el estado en vez de un botón manual.
+    if (hayPend) {
+      html += `<div style="padding:12px 14px;background:var(--bg2);border:1.5px solid var(--yellow);border-radius:10px;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">⏳</span>
+        <div style="flex:1">Subiendo ${pend.length} pendiente(s) automáticamente…<div style="font-size:11px;color:var(--ink3);margin-top:2px">Se envían solos apenas hay señal. No hace falta hacer nada.</div></div>
+      </div>
+      <button style="padding:10px;background:transparent;border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--ink3);cursor:pointer" onclick="trySync()">↻ Reintentar ahora</button>`;
+    } else {
+      html += `<div style="padding:12px 14px;background:var(--bg2);border:1.5px solid var(--green);border-radius:10px;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">✅</span>
+        <div style="flex:1">Todo sincronizado<div style="font-size:11px;color:var(--ink3);margin-top:2px">Las fotos nuevas se suben solas al guardar cada relevamiento.</div></div>
+      </div>`;
+    }
+    html += `<button style="padding:12px;background:var(--bg2);border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer" onclick="actualizarAsignaciones()">📥 Actualizar mis asignaciones</button>`;
+  }
+  html += `</div>`;
 
     document.getElementById('syncContent').innerHTML = html;
 }
