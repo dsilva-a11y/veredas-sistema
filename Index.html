@@ -1309,22 +1309,21 @@ function clasificarFrente(a){
 }
 
 // Normaliza el campo `estado` guardado para que coincida con la clasificación real (por pct).
-// Corre automáticamente antes de publicar, así los Excel y la base quedan prolijos y consistentes
-// entre todos los usuarios. NO toca frentes ANULADA (la anulación es una decisión manual que
-// gana siempre) ni pisa nada más: solo reescribe el texto del estado cuando quedó desalineado.
-// Marca _editado + _updated en los que cambia, para que la corrección se propague por sync.
+// Es SOLO prolijidad de datos (para que los Excel salgan limpios), NO una edición del usuario.
+// Por eso NO marca _editado ni toca _updated: si lo hiciera, generaría "ediciones fantasma"
+// que compiten en la resolución de conflictos y hacen que dos usuarios NUNCA converjan
+// (cada uno se quedaría con su propia normalización y se ignorarían mutuamente en cada sync).
+// Como el pct —que es la fuente de verdad— ya viaja por sync, alcanza con que cada usuario
+// normalice su propia copia localmente; el resultado es idéntico para todos sin ensuciar timestamps.
+// NO toca frentes ANULADA (la anulación es una decisión manual que gana siempre).
 // Devuelve la cantidad de frentes corregidos.
-function normalizarEstados(marcarParaSync = true){
+function normalizarEstados(){
   let n = 0;
   ALL.forEach(a => {
     if ((a.estado||'').toUpperCase() === 'ANULADA') return; // los anulados no se tocan
     const canonico = clasificarFrente(a);
     if ((a.estado||'') !== canonico) {
-      a.estado = canonico;
-      if (marcarParaSync) {
-        a._editado = true;
-        a._updated = new Date().toISOString();
-      }
+      a.estado = canonico; // solo reescribe el texto; sin _editado, sin _updated
       n++;
     }
   });
@@ -2838,7 +2837,7 @@ async function sincronizarTodo() {
           if (Array.isArray(data) && data.length) {
             ALL.length = 0;
             data.forEach(f => ALL.push(f));
-            normalizarEstados(true); // dejar la base prolija desde la primera carga
+            normalizarEstados(); // dejar la base prolija desde la primera carga
             saveData();
             await registrarVersionBaseLocal();
             renderTable(); applyFilters(); initDash(); initCert();
@@ -2884,13 +2883,11 @@ async function sincronizarTodo() {
     }
 
     // PASO 2.5: Normalizar el campo `estado` según el pct real (auto, silencioso).
-    // Deja la base prolija para los Excel y consistente entre todos los usuarios.
-    // Corre después de fusionar los avances de la app (así corrige también lo recién bajado)
-    // y antes de publicar (así las correcciones viajan a Drive en este mismo sync).
-    const normalizados = normalizarEstados(true);
-    if (normalizados > 0) {
-      logAudit('Normalización automática de estados', `${normalizados} frentes alineados al % real`);
-    }
+    // PASO 2.5: Normalizar el campo `estado` según el pct real (local, silencioso).
+    // Es solo prolijidad para que los Excel salgan limpios. Cada usuario normaliza su
+    // propia copia; como deriva del pct (que sí viaja por sync), el resultado es idéntico
+    // para todos. NO marca _editado ni se registra como acción: no modifica datos compartidos.
+    normalizarEstados();
 
     // PASO 3: Publicar asignaciones y ediciones del backoffice
     await publicarAsignaciones(true);
