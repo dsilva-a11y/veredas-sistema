@@ -395,6 +395,21 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
       <!-- 2. KPIs certificacion -->
       <div class="kr3" id="certKpis" style="margin-bottom:12px"></div>
 
+      <!-- 2b. CERTIFICACIÓN POR PERÍODO DE CERTIFICADO (avance real vs certificado) -->
+      <div class="panel" style="margin-bottom:12px;border:1.5px solid rgba(79,163,232,.3)">
+        <div class="ph" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span class="pt">📑 Certificación por período de obra</span>
+          <select class="sf" id="certPeriodoSel" onchange="renderCertPeriodo()" style="width:auto;font-size:12px"></select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;margin-left:auto">
+            <input type="checkbox" id="certIncluirArrastre" checked onchange="renderCertPeriodo()" style="cursor:pointer">
+            Sumar arrastre (ejecutados antes, se certifican en este período)
+          </label>
+        </div>
+        <div class="pb2" style="padding:14px 16px">
+          <div id="certPeriodoContenido"></div>
+        </div>
+      </div>
+
       <!-- 3. Tabla sin medicion — colapsable -->
       <div class="cert-section" style="margin-bottom:10px">
         <div class="cert-header" onclick="toggleCertPanel('sinMed')" style="cursor:pointer;user-select:none">
@@ -560,6 +575,13 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
             <select class="sf" id="demResp" onchange="renderDemorados()" style="width:auto">
               <option value="">Todos los responsables</option>
             </select>
+            <select class="sf" id="demEtapa" onchange="renderDemorados()" style="width:auto" title="Filtrar por etapa / % de avance">
+              <option value="">Todas las etapas</option>
+              <option value="25">Apertura (25%)</option>
+              <option value="50">Hormigonado (50%)</option>
+              <option value="75">Colocación (75%)</option>
+              <option value="98">Con observaciones (98%)</option>
+            </select>
           </div>
           <button class="btn bg" onclick="exportDemorados()" style="margin-left:auto">↓ CSV</button>
           <button class="btn bg" onclick="exportXLSXDemorados()" style="background:rgba(240,192,80,.15);color:var(--yellow);border-color:rgba(240,192,80,.3)">↓ Excel</button>
@@ -700,6 +722,23 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
               <span id="importPMStatus" style="font-size:12px;color:var(--text3)"></span>
             </div>
             <div id="importPMResult" style="margin-top:14px"></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:16px;border:1.5px solid rgba(79,163,232,.35)">
+          <div class="ph"><span class="pt">📑 Importar certificados / avance (solo períodos)</span></div>
+          <div class="pb2">
+            <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.7">
+              Cargá un Excel simple con <strong>3 columnas</strong> para actualizar únicamente los números de período:<br>
+              <strong style="color:var(--blue)">ACRE · CERTIFICADO · AVANCE</strong> (acepta también: ID / CERTIFICADOS / AVANCE REAL).<br>
+              <span style="color:var(--green)">✓ Solo toca <strong>cert_periodo</strong> y <strong>avance_periodo</strong>. No altera estado, %, fechas, responsable ni ningún otro dato existente.</span>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <input type="file" id="importCert" accept=".xlsx,.xls,.csv" onchange="importarCertificados(this)" style="display:none">
+              <button class="btn bp" onclick="document.getElementById('importCert').click()" style="background:rgba(79,163,232,.15);color:var(--blue);border-color:rgba(79,163,232,.3)">📂 Seleccionar Excel de certificados</button>
+              <span id="importCertStatus" style="font-size:12px;color:var(--text3)"></span>
+            </div>
+            <div id="importCertResult" style="margin-top:14px"></div>
           </div>
         </div>
 
@@ -1154,6 +1193,9 @@ async function publicarAsignaciones(silencioso = false) {
         f_col: existing.f_col || a.f_col || null,
         f_fin: existing.f_fin || a.f_fin || null,
         f_med: existing.f_med || a.f_med || null,
+        // Períodos de certificación: el backoffice/planilla madre manda (vienen del Excel)
+        cert_periodo:   a.cert_periodo   ?? existing.cert_periodo   ?? null,
+        avance_periodo: a.avance_periodo ?? existing.avance_periodo ?? null,
         // Si el backoffice editó este frente, su timestamp gana; si no, preservar el del inspector
         _updated: backofficeEdito ? (a._updated || new Date().toISOString()) : (existing._updated || a._updated || null),
       };
@@ -1245,6 +1287,8 @@ async function importarExcel(input) {
         f_col: existing?.f_col || null,
         f_fin: existing?.f_fin || null,
         f_med: existing?.f_med || null,
+        cert_periodo:   existing?.cert_periodo   ?? null,
+        avance_periodo: existing?.avance_periodo ?? null,
         _updated: new Date().toISOString(),
         _editado: true,
       };
@@ -1879,7 +1923,118 @@ function initCert(){
   const tabs=document.getElementById('monthTabs');
   tabs.innerHTML=sorted.slice(0,6).map(m=>`<div class="month-tab ${m===certMonth?'active':''}" onclick="setCertMonth('${m}',this)">${monthLabel(m)}</div>`).join('');
   renderCert();
+  initCertPeriodo();
 }
+
+// ─── CERTIFICACIÓN POR PERÍODO DE CERTIFICADO ─────────────────────
+// Modelo de la Planilla Madre: cada frente tiene DOS números de certificado de obra:
+//   avance_periodo = en qué certificado se EJECUTÓ realmente
+//   cert_periodo   = en qué certificado se CERTIFICA/cobra (puede ser posterior o anterior)
+// Un frente terminado en el certificado 9 pero cobrado en el 10 tiene avance=9, cert=10.
+// Esto permite responder: para el certificado N, ¿cuánto voy a certificar (todo lo que
+// se cobra en N) vs cuánto ejecuté realmente (todo lo que se hizo en N)?
+let certPeriodoSel = null;
+
+function periodosDisponibles(){
+  const set = new Set();
+  ALL.forEach(a=>{
+    if(Number.isFinite(a.cert_periodo)) set.add(a.cert_periodo);
+    if(Number.isFinite(a.avance_periodo)) set.add(a.avance_periodo);
+  });
+  return [...set].sort((x,y)=>y-x); // más reciente primero
+}
+
+function initCertPeriodo(){
+  const periodos = periodosDisponibles();
+  const sel = document.getElementById('certPeriodoSel');
+  if(!sel) return;
+  if(!periodos.length){
+    sel.innerHTML = '<option value="">Sin datos de período</option>';
+    const cont = document.getElementById('certPeriodoContenido');
+    if(cont) cont.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Los períodos de certificado se cargan desde las columnas <strong>CERTIFICADOS</strong> y <strong>Avance real</strong> de la Planilla Madre. Importá la planilla para ver este análisis.</div>';
+    return;
+  }
+  if(certPeriodoSel===null || !periodos.includes(certPeriodoSel)) certPeriodoSel = periodos[0];
+  sel.innerHTML = periodos.map(p=>`<option value="${p}" ${p===certPeriodoSel?'selected':''}>Certificado ${p}</option>`).join('');
+  renderCertPeriodo();
+}
+
+function renderCertPeriodo(){
+  const cont = document.getElementById('certPeriodoContenido');
+  if(!cont) return;
+  const sel = document.getElementById('certPeriodoSel');
+  const N = sel && sel.value!=='' ? Number(sel.value) : certPeriodoSel;
+  if(!Number.isFinite(N)) return;
+  certPeriodoSel = N;
+  const incluirArrastre = document.getElementById('certIncluirArrastre')?.checked ?? true;
+
+  const noAnulado = a => (a.estado||'').toUpperCase()!=='ANULADA';
+
+  // A CERTIFICAR en el período N: todos los que se cobran en N
+  const aCertificar = ALL.filter(a=>noAnulado(a) && a.cert_periodo===N);
+  // De esos, los que se EJECUTARON en un período ANTERIOR = arrastre
+  const arrastre = aCertificar.filter(a=>Number.isFinite(a.avance_periodo) && a.avance_periodo < N);
+  // Los que se ejecutan y certifican en el mismo período N
+  const alDia = aCertificar.filter(a=>!(Number.isFinite(a.avance_periodo) && a.avance_periodo < N));
+
+  // EJECUTADO REAL en el período N: todos los que se hicieron en N (más allá de cuándo se cobren)
+  const ejecutadoReal = ALL.filter(a=>noAnulado(a) && a.avance_periodo===N);
+  // De lo ejecutado en N, lo que se certifica MÁS ADELANTE (todavía no se cobra en N) = pendiente futuro
+  const seCobraDespues = ejecutadoReal.filter(a=>Number.isFinite(a.cert_periodo) && a.cert_periodo > N);
+
+  const m2 = arr => arr.reduce((s,a)=>s+(a.area||0),0);
+
+  // A certificar según el toggle: con o sin el arrastre de períodos anteriores
+  const m2Certificar = incluirArrastre ? m2(aCertificar) : m2(alDia);
+  const nCertificar  = incluirArrastre ? aCertificar.length : alDia.length;
+
+  cont.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px">
+      <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--green)">
+        <div style="font-size:22px;font-weight:800;color:var(--green);font-family:var(--fh)">${fmt(m2Certificar)} m²</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Voy a certificar en Cert. ${N}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${nCertificar} frentes${incluirArrastre?' (incluye arrastre)':' (solo del período)'}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--blue)">
+        <div style="font-size:22px;font-weight:800;color:var(--blue);font-family:var(--fh)">${fmt(m2(ejecutadoReal))} m²</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Ejecuté realmente en Cert. ${N}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${ejecutadoReal.length} frentes terminados en el período</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:14px;border-left:3px solid var(--yellow)">
+        <div style="font-size:22px;font-weight:800;color:var(--yellow);font-family:var(--fh)">${fmt(m2(arrastre))} m²</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Arrastre de períodos anteriores</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${arrastre.length} frentes ejecutados antes, se cobran ahora</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7;background:var(--bg2);border-radius:6px;padding:10px 12px">
+      <div>📌 En el <strong>Certificado ${N}</strong> vas a cobrar <strong style="color:var(--green)">${fmt(m2Certificar)} m²</strong> (${nCertificar} frentes)${incluirArrastre && arrastre.length? `, de los cuales <strong style="color:var(--yellow)">${fmt(m2(arrastre))} m²</strong> son arrastre de obra ejecutada en períodos anteriores.` : '.'}</div>
+      ${seCobraDespues.length? `<div style="margin-top:6px">⏭️ Además ejecutaste <strong style="color:var(--blue)">${fmt(m2(seCobraDespues))} m²</strong> (${seCobraDespues.length} frentes) en este período que se van a certificar más adelante.</div>`:''}
+      <div style="margin-top:6px;color:var(--text3)">Diferencia certificado vs ejecutado real: <strong>${fmt(m2Certificar - m2(ejecutadoReal))} m²</strong></div>
+    </div>
+    ${arrastre.length? `
+    <div style="margin-top:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:6px">Frentes de arrastre (ejecutados antes, se certifican en Cert. ${N}):</div>
+      <div style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:6px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;background:var(--bg2)"><tr style="color:var(--text3);text-align:left">
+            <th style="padding:6px 10px">Acre</th><th style="padding:6px 10px">Dirección</th>
+            <th style="padding:6px 10px;text-align:right">m²</th>
+            <th style="padding:6px 10px;text-align:center">Ejecutado en</th>
+            <th style="padding:6px 10px;text-align:center">Se certifica en</th>
+          </tr></thead>
+          <tbody>${arrastre.map(a=>`<tr onclick="openModal('${a.id}')" style="cursor:pointer;border-top:1px solid var(--line)">
+            <td style="padding:6px 10px;color:var(--accent);font-weight:600">${a.id}</td>
+            <td style="padding:6px 10px">${a.dir} ${a.alt||''}</td>
+            <td style="padding:6px 10px;text-align:right">${(a.area||0).toFixed(1)}</td>
+            <td style="padding:6px 10px;text-align:center">Cert. ${a.avance_periodo}</td>
+            <td style="padding:6px 10px;text-align:center;color:var(--yellow);font-weight:600">Cert. ${N}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`:''}
+  `;
+}
+
 function setCertMonth(m,el){
   certMonth=m;
   document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
@@ -2199,11 +2354,20 @@ function initDemorados(){
   renderDemorados();
 }
 
-function renderDemorados(){
+// Aplica los 3 filtros de la pantalla (umbral, responsable, etapa) — única fuente para
+// render y exports, así el CSV/Excel siempre sale idéntico a lo que se ve en pantalla.
+function demoradosFiltrados(){
   const umbral = Number(document.getElementById('demDias')?.value || 4);
   const respFiltro = document.getElementById('demResp')?.value || '';
+  const etapaFiltro = document.getElementById('demEtapa')?.value || '';
   let lista = frentesDemorados(umbral);
   if(respFiltro) lista = lista.filter(a=>(a.resp||'')===respFiltro);
+  if(etapaFiltro!=='') lista = lista.filter(a=>Number(a.pct||0)===Number(etapaFiltro));
+  return { lista, umbral };
+}
+
+function renderDemorados(){
+  const { lista, umbral } = demoradosFiltrados();
 
   // Ordenar
   lista.sort((a,b)=>{
@@ -2247,10 +2411,7 @@ function renderDemorados(){
 function sbDem(k){ if(demSortKey===k)demSortDir*=-1; else{demSortKey=k;demSortDir=(k==='dias')?-1:1;} renderDemorados(); }
 
 function exportDemorados(){
-  const umbral = Number(document.getElementById('demDias')?.value || 4);
-  const respFiltro = document.getElementById('demResp')?.value || '';
-  let lista = frentesDemorados(umbral);
-  if(respFiltro) lista = lista.filter(a=>(a.resp||'')===respFiltro);
+  const { lista } = demoradosFiltrados();
   if(!lista.length){ showToast('No hay frentes demorados para exportar'); return; }
   const esc = v => { const s=String(v??''); return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
   const cols=['ACRE','DIRECCIÓN','ALTURA','COMUNA','M²','MATERIALIDAD','ETAPA','F.APERTURA','DÍAS DESDE APERTURA','RESPONSABLE','OBS'];
@@ -2261,10 +2422,7 @@ function exportDemorados(){
 }
 
 function exportXLSXDemorados(){
-  const umbral = Number(document.getElementById('demDias')?.value || 4);
-  const respFiltro = document.getElementById('demResp')?.value || '';
-  let lista = frentesDemorados(umbral);
-  if(respFiltro) lista = lista.filter(a=>(a.resp||'')===respFiltro);
+  const { lista } = demoradosFiltrados();
   if(!lista.length){ showToast('No hay frentes demorados para exportar'); return; }
   const datos = lista.map(a=>({
     'ACRE':a.id,'DIRECCIÓN':a.dir,'ALTURA':a.alt||'','COMUNA':a.com||'','M²':a.area||0,
@@ -2902,7 +3060,7 @@ function mergeAcresData(updates) {
   // Incluye los campos descriptivos (dir/alt/com/area/interv/mat): antes solo viajaban los
   // operativos, así que una corrección de dirección o área hecha por un supervisor nunca
   // le llegaba a los demás backoffices.
-  const CAMPOS = ['estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med','dir','alt','com','area','interv','mat'];
+  const CAMPOS = ['estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med','dir','alt','com','area','interv','mat','cert_periodo','avance_periodo'];
   let count = 0;
   const idx = {};
   ALL.forEach((a,i) => idx[a.id] = i);
@@ -2942,7 +3100,7 @@ function mergeAcresData(updates) {
 
 // Exportar ALL como array compacto (solo campos que pueden cambiar)
 function exportAcresData() {
-  const CAMPOS = ['id','dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med'];
+  const CAMPOS = ['id','dir','alt','com','area','interv','mat','estado','pct','resp','obs','obs_g','obs_back','prio','f_prog','f_aper','f_horm','f_col','f_fin','f_med','cert_periodo','avance_periodo'];
   return ALL.map(a => {
     const o = {};
     CAMPOS.forEach(f => o[f] = a[f] ?? null);
@@ -4132,6 +4290,105 @@ async function revocarAccesoDrive(permId, email) {
 
 fillRespSelect();fillMatSelect();fillComSelect();
 initParte();
+// ─── IMPORTAR CERTIFICADOS / AVANCE (solo períodos) ──────────────
+// Import quirúrgico: lee un Excel/CSV simple de 3 columnas (ACRE, CERTIFICADO, AVANCE)
+// y actualiza ÚNICAMENTE cert_periodo y avance_periodo de los frentes que ya existen.
+// NO toca estado, pct, fechas, responsable, observaciones ni nada más. NO crea frentes nuevos.
+async function importarCertificados(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('importCertStatus');
+  const result = document.getElementById('importCertResult');
+  status.textContent = '⏳ Leyendo archivo...';
+  result.innerHTML = '';
+  input.value = '';
+
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]]; // primera hoja
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: false });
+
+    if (!rows.length) {
+      result.innerHTML = `<span style="color:var(--accent)">❌ El archivo está vacío.</span>`;
+      status.textContent = '';
+      return;
+    }
+
+    // Detectar columnas de forma flexible (tolera variantes de nombre y mayúsculas)
+    const findKey = (row, variantes) => {
+      const keys = Object.keys(row);
+      for (const v of variantes) {
+        const k = keys.find(k => k.trim().toUpperCase() === v.toUpperCase());
+        if (k) return k;
+      }
+      return null;
+    };
+    const sample = rows[0];
+    const kAcre   = findKey(sample, ['ACRE','ID','ACRES','FRENTE']);
+    const kCert   = findKey(sample, ['CERTIFICADO','CERTIFICADOS','CERT','CERTIFICACION']);
+    const kAvance = findKey(sample, ['AVANCE','AVANCE REAL','AVANCEREAL','EJECUCION','EJECUTADO']);
+
+    if (!kAcre || (!kCert && !kAvance)) {
+      result.innerHTML = `<span style="color:var(--accent)">❌ No se encontraron las columnas esperadas.<br>
+        Necesito una columna de <strong>ACRE</strong> y al menos una de <strong>CERTIFICADO</strong> o <strong>AVANCE</strong>.<br>
+        <span style="color:var(--text3)">Columnas detectadas: ${Object.keys(sample).join(', ')}</span></span>`;
+      status.textContent = '';
+      return;
+    }
+
+    const parsePeriodo = v => { const n = parseInt(String(v??'').trim(), 10); return Number.isFinite(n) ? n : null; };
+    const idx = {};
+    ALL.forEach((a, i) => idx[a.id] = i);
+
+    let actualizados = 0, noEncontrados = 0, sinDatos = 0;
+    const cambios = [];
+    const faltantes = [];
+
+    for (const row of rows) {
+      const acre = String(row[kAcre] ?? '').trim().toUpperCase();
+      if (!acre) continue;
+      const cert   = kCert   ? parsePeriodo(row[kCert])   : null;
+      const avance = kAvance ? parsePeriodo(row[kAvance]) : null;
+      if (cert === null && avance === null) { sinDatos++; continue; }
+
+      if (idx[acre] === undefined) { noEncontrados++; faltantes.push(acre); continue; }
+      const a = ALL[idx[acre]];
+      const certAntes = a.cert_periodo, avAntes = a.avance_periodo;
+      if (cert   !== null) a.cert_periodo   = cert;
+      if (avance !== null) a.avance_periodo = avance;
+      // marcar para que la corrección viaje por sync (solo estos campos cambian)
+      a._editado = true;
+      a._updated = new Date().toISOString();
+      if (certAntes !== a.cert_periodo || avAntes !== a.avance_periodo) {
+        cambios.push({ id: acre, cert: a.cert_periodo, avance: a.avance_periodo });
+        actualizados++;
+      }
+    }
+
+    saveData();
+    applyFilters(); actualizarBadges();
+    if (typeof initCert === 'function') { try { initCertPeriodo(); } catch(e){} }
+    _importacionPendiente = true; // publicar en la próxima sincronización
+
+    if (actualizados > 0) logAudit('Importó certificados/avance', `${actualizados} frentes actualizados (solo períodos)`);
+
+    let html = `<div style="background:var(--bg2);border-radius:6px;padding:12px 14px;font-size:13px">
+      <div style="color:var(--green);font-weight:600;margin-bottom:6px">✓ ${actualizados} frentes actualizados (solo cert/avance)</div>`;
+    if (noEncontrados > 0) {
+      html += `<div style="color:var(--yellow);margin-bottom:4px">⚠ ${noEncontrados} acres del Excel no existen en la base y se ignoraron${faltantes.length<=15?`: ${faltantes.join(', ')}`:` (ej: ${faltantes.slice(0,15).join(', ')}…)`}</div>`;
+    }
+    if (sinDatos > 0) html += `<div style="color:var(--text3);margin-bottom:4px">${sinDatos} filas sin número de certificado ni avance (ignoradas)</div>`;
+    html += `<div style="color:var(--text3);margin-top:6px">Sincronizá para publicar estos cambios al resto de los usuarios.</div></div>`;
+    result.innerHTML = html;
+    status.textContent = '';
+    showToast(`✓ ${actualizados} frentes actualizados con certificado/avance`);
+  } catch (e) {
+    result.innerHTML = `<span style="color:var(--accent)">❌ Error: ${e.message}</span>`;
+    status.textContent = '';
+  }
+}
+
 // ─── IMPORTAR PLANILLA MADRE ──────────────────────────────────────
 async function importarPlanillaMadre(input) {
   const file = input.files[0];
@@ -4183,6 +4440,8 @@ async function importarPlanillaMadre(input) {
       f_col:  ['FECHA COLOCACION','Fecha Colocacion'],
       f_fin:  ['FECHA DE FIN.','Fecha de Fin.','FECHA FIN'],
       pct_raw:['%Completado','% Completado','PCT'],
+      cert_periodo:   ['CERTIFICADOS','Certificados','CERTIFICADO','Certificado'],
+      avance_periodo: ['Avance real','AVANCE REAL','Avance Real','AVANCE'],
     };
 
     function getCol(row, keys) {
@@ -4243,6 +4502,11 @@ async function importarPlanillaMadre(input) {
       const f_col  = fmtDate(getCol(row, colMap.f_col));
       const f_fin  = fmtDate(getCol(row, colMap.f_fin));
       const pct_raw = getCol(row, colMap.pct_raw);
+      // Períodos de certificado (números de certificado de obra, no meses):
+      // cert_periodo = en qué certificado se cobra; avance_periodo = en cuál se ejecutó realmente
+      const parsePeriodo = v => { const n = parseInt(String(v??'').trim(), 10); return Number.isFinite(n) ? n : null; };
+      const cert_periodo   = parsePeriodo(getCol(row, colMap.cert_periodo));
+      const avance_periodo = parsePeriodo(getCol(row, colMap.avance_periodo));
 
       const { estado, pct } = derivarEstadoPct(f_med, f_fin, f_col, f_horm, f_aper, f_prog, pct_raw);
 
@@ -4280,6 +4544,8 @@ async function importarPlanillaMadre(input) {
         if (f_horm) a.f_horm = f_horm;
         if (f_col)  a.f_col  = f_col;
         if (f_fin)  a.f_fin  = f_fin;
+        if (cert_periodo   !== null) a.cert_periodo   = cert_periodo;
+        if (avance_periodo !== null) a.avance_periodo = avance_periodo;
         a._updated = ahora;
         a._editado = true;
         if (prev_estado !== estado) preview.push({ id, de: prev_estado, a: estado });
@@ -4288,7 +4554,8 @@ async function importarPlanillaMadre(input) {
         // Frente nuevo
         ALL.push({ id, dir, alt, com, area, interv, mat, resp, obs, obs_g,
           estado, pct, f_med, f_prog: f_prog === 'X' ? null : f_prog,
-          f_aper, f_horm, f_col, f_fin, _updated: ahora, _editado: true });
+          f_aper, f_horm, f_col, f_fin, cert_periodo, avance_periodo,
+          _updated: ahora, _editado: true });
         idx[id] = ALL.length - 1;
         nuevos++;
       }
