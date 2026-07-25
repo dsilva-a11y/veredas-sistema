@@ -242,6 +242,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
     <div class="ni" onclick="goTo('cert',this)">📐 &nbsp;Certificación mensual</div>
     <div class="ni" onclick="goTo('dash',this)">⬛ &nbsp;Dashboard m²</div>
     <div class="ni" onclick="goTo('mapa',this)">🗺️ &nbsp;Mapa de frentes</div>
+    <div class="ni" onclick="goTo('demorados',this)">⏱️ &nbsp;Frentes demorados &nbsp;<span class="nb" id="nb-dem" style="background:rgba(232,98,58,.15);color:var(--accent)">0</span></div>
     <div class="ni" onclick="goTo('lista',this)">📋 &nbsp;Listado de frentes &nbsp;<span class="nb" id="nb-total">0</span></div>
     <div class="nl">Filtros rápidos</div>
     <div class="ni" onclick="qf('EN EJECUCION',this)">🟡 &nbsp;En ejecución &nbsp;<span class="nb y" id="nb-ei">0</span></div>
@@ -544,6 +545,43 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
       </div>
     </div>
 
+    <!-- ══ FRENTES DEMORADOS ══ -->
+    <div id="page-demorados" class="page">
+      <div class="tb">
+        <div class="toolbar">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:13px;color:var(--text2)">Umbral de demora:</span>
+            <select class="sf" id="demDias" onchange="renderDemorados()" style="width:auto">
+              <option value="4">Más de 4 días</option>
+              <option value="7">Más de 7 días</option>
+              <option value="10">Más de 10 días</option>
+              <option value="15">Más de 15 días</option>
+            </select>
+            <select class="sf" id="demResp" onchange="renderDemorados()" style="width:auto">
+              <option value="">Todos los responsables</option>
+            </select>
+          </div>
+          <button class="btn bg" onclick="exportDemorados()" style="margin-left:auto">↓ CSV</button>
+          <button class="btn bg" onclick="exportXLSXDemorados()" style="background:rgba(240,192,80,.15);color:var(--yellow);border-color:rgba(240,192,80,.3)">↓ Excel</button>
+        </div>
+        <div id="demResumen" style="padding:8px 4px;font-size:12px;color:var(--text3)"></div>
+        <div class="tw" style="max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse"><thead style="position:sticky;top:0;background:var(--bg2);z-index:2"><tr>
+            <th onclick="sbDem('id')" style="cursor:pointer">Acre</th>
+            <th onclick="sbDem('dir')" style="cursor:pointer">Dirección</th>
+            <th>Com.</th>
+            <th onclick="sbDem('area')" style="cursor:pointer">m²</th>
+            <th>Materialidad</th>
+            <th>Etapa actual</th>
+            <th onclick="sbDem('f_aper')" style="cursor:pointer">F. Apertura</th>
+            <th onclick="sbDem('dias')" style="cursor:pointer">Días desde apertura</th>
+            <th>Responsable</th>
+            <th>Obs.</th>
+          </tr></thead><tbody id="demBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
     <!-- ══ LISTA ══ -->
     <div id="page-lista" class="page">
       <div class="tb">
@@ -564,6 +602,16 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </select>
           <select class="sf" onchange="fM(this.value)" id="fMat">
             <option value="">Todas las materialidades</option>
+          </select>
+          <select class="sf" onchange="fP(this.value)" id="fPct" title="Filtrar por % de avance">
+            <option value="">Todos los %</option>
+            <option value="0">0% — Sin iniciar</option>
+            <option value="1">1% — Programado p/ apertura</option>
+            <option value="25">25% — Apertura</option>
+            <option value="50">50% — Hormigonado</option>
+            <option value="75">75% — Colocación</option>
+            <option value="98">98% — Con observaciones</option>
+            <option value="100">100% — Finalizado</option>
           </select>
           <button class="btn bg" onclick="clearF()" style="margin-left:auto">✕ Limpiar</button>
           <button class="btn bg" onclick="exportCSV()">↓ CSV</button>
@@ -1331,6 +1379,14 @@ function normalizarEstados(){
   return n;
 }
 
+// ¿El frente está en condiciones de medirse? Finalizado (100%/EJECUTADO) o al 98%
+// (con observaciones — vereda construida, falta resolver una obs menor). Los anulados no.
+function esMedible(a){
+  if((a.estado||'').toUpperCase()==='ANULADA') return false;
+  const pct = Number(a.pct||0);
+  return clasificarFrente(a)==='EJECUTADO' || pct===98;
+}
+
 // ─── STATS ────────────────────────────────────────────────────────
 function calcStats(){
   const r={m2ej:0,m2ei:0,m2ae:0,m2tot:0,frej:0,frei:0,frae:0,fran:0,frtot:0,estados:{},resps:{},comunas:{},mats:{}};
@@ -1365,6 +1421,7 @@ function actualizarBadges(){
   set('nb-an', St.fran);
   const sinAsig = ALL.filter(a => !a.resp && clasificarFrente(a) !== 'EJECUTADO' && clasificarFrente(a) !== 'ANULADA').length;
   set('nb-sin-asig', sinAsig);
+  set('nb-dem', contarDemorados(4)); // demorados con más de 4 días (umbral por defecto)
   return St;
 }
 const S = actualizarBadges();
@@ -1830,8 +1887,11 @@ function setCertMonth(m,el){
   renderCert();
 }
 function renderCert(){
-  const sinMed=ALL.filter(a=>a.estado==='EJECUTADO'&&!a.f_med);
-  const medMes=ALL.filter(a=>a.estado==='EJECUTADO'&&a.f_med&&a.f_med.slice(0,7)===certMonth);
+  // Medibles: finalizados (100%/EJECUTADO) Y también los que están al 98% (con observaciones).
+  // Un frente al 98% ya tiene la vereda construida —solo le falta resolver una observación
+  // menor— así que se habilita para medir. Se excluyen los que ya tienen fecha de medición.
+  const sinMed=ALL.filter(a=>esMedible(a)&&!a.f_med);
+  const medMes=ALL.filter(a=>esMedible(a)&&a.f_med&&a.f_med.slice(0,7)===certMonth);
 
   const m2Sin=sinMed.reduce((s,a)=>s+(a.area||0),0);
   const m2Mes=medMes.reduce((s,a)=>s+(a.area||0),0);
@@ -1964,8 +2024,8 @@ function renderCert(){
   }).join('');
 }
 function exportCert(){
-  const sinMed=ALL.filter(a=>a.estado==='EJECUTADO'&&!a.f_med);
-  const medMes=ALL.filter(a=>a.estado==='EJECUTADO'&&a.f_med&&a.f_med.slice(0,7)===certMonth);
+  const sinMed=ALL.filter(a=>esMedible(a)&&!a.f_med);
+  const medMes=ALL.filter(a=>esMedible(a)&&a.f_med&&a.f_med.slice(0,7)===certMonth);
   const h=['ACRE','DIRECCION','ALTURA','COMUNA','AREA_M2','MATERIALIDAD','RESPONSABLE','F_FIN','F_MEDICION','TIPO'];
   const rows=[...sinMed.map(a=>[a.id,a.dir,a.alt,a.com,a.area,a.mat,a.resp,a.f_fin||'','','SIN MEDICION']),...medMes.map(a=>[a.id,a.dir,a.alt,a.com,a.area,a.mat,a.resp,a.f_fin||'',a.f_med,'MEDIDO_MES'])];
   const csv=[h.join(','),...rows.map(r=>r.join(','))].join('\n');
@@ -2084,9 +2144,140 @@ function initDash(){
   }).join('');
 }
 
+// ─── FRENTES DEMORADOS ───────────────────────────────────────────
+// Un frente "en obra" (aperturado, pct>=25) que no terminó y lleva más de N días
+// desde su fecha de apertura se considera demorado. Cuenta desde f_aper hasta hoy.
+let demSortKey='dias', demSortDir=-1;
+
+function diasDesde(fechaISO){
+  if(!fechaISO) return null;
+  const d = new Date(fechaISO);
+  if(isNaN(d.getTime())) return null;
+  const hoy = new Date();
+  // normalizar a medianoche para contar días calendario completos
+  d.setHours(0,0,0,0); hoy.setHours(0,0,0,0);
+  return Math.floor((hoy - d) / 86400000);
+}
+
+// ¿El frente está aperturado y todavía en obra (no finalizado ni medido)?
+function enObra(a){
+  if((a.estado||'').toUpperCase()==='ANULADA') return false;
+  const g = clasificarFrente(a);
+  if(g==='EJECUTADO' || g==='ANULADA') return false; // ya terminado
+  const pct = Number(a.pct||0);
+  return pct>=25 && pct<100; // 25/50/75/98 = en obra activa
+}
+
+function frentesDemorados(umbralDias){
+  const res=[];
+  ALL.forEach(a=>{
+    if(!enObra(a)) return;
+    const dias = diasDesde(a.f_aper);
+    if(dias===null) return;        // sin fecha de apertura: no se puede evaluar
+    if(dias > umbralDias){
+      res.push({...a, dias});
+    }
+  });
+  return res;
+}
+
+function contarDemorados(umbralDias=4){
+  return frentesDemorados(umbralDias).length;
+}
+
+const ETAPA_LABEL = {25:'Apertura',50:'Hormigonado',75:'Colocación',98:'Con observaciones'};
+
+function initDemorados(){
+  // Poblar el select de responsables (unificado, igual que el resto)
+  const sel=document.getElementById('demResp');
+  if(sel){
+    const val=sel.value;
+    sel.innerHTML='<option value="">Todos los responsables</option>'
+      + responsablesUnificados().map(n=>`<option value="${n}">${n}</option>`).join('');
+    sel.value=val;
+  }
+  renderDemorados();
+}
+
+function renderDemorados(){
+  const umbral = Number(document.getElementById('demDias')?.value || 4);
+  const respFiltro = document.getElementById('demResp')?.value || '';
+  let lista = frentesDemorados(umbral);
+  if(respFiltro) lista = lista.filter(a=>(a.resp||'')===respFiltro);
+
+  // Ordenar
+  lista.sort((a,b)=>{
+    let av=a[demSortKey]??'', bv=b[demSortKey]??'';
+    return typeof av==='number'&&typeof bv==='number' ? (av-bv)*demSortDir : String(av).localeCompare(String(bv))*demSortDir;
+  });
+
+  const m2 = lista.reduce((s,a)=>s+(a.area||0),0);
+  const resumen = document.getElementById('demResumen');
+  if(resumen){
+    resumen.innerHTML = lista.length
+      ? `<strong style="color:var(--accent)">${lista.length}</strong> frentes demorados (más de ${umbral} días aperturados sin finalizar) · ${fmt(m2)} m²`
+      : `<span style="color:var(--green)">✓ No hay frentes demorados con más de ${umbral} días</span>`;
+  }
+
+  const body = document.getElementById('demBody');
+  if(!body) return;
+  if(!lista.length){
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3)">Sin frentes demorados</td></tr>`;
+    return;
+  }
+  body.innerHTML = lista.map(a=>{
+    const etapa = ETAPA_LABEL[Number(a.pct)] || `${a.pct}%`;
+    // color según gravedad del atraso
+    const grav = a.dias > umbral*2 ? 'var(--accent)' : 'var(--yellow)';
+    return `<tr onclick="openModal('${a.id}')">
+      <td class="tc">${a.id}</td>
+      <td class="tn">${a.dir} ${a.alt||''}</td>
+      <td class="tss">${a.com||'—'}</td>
+      <td class="tss">${a.area?a.area.toFixed(1):'—'}</td>
+      <td class="tss" style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.mat||'—'}</td>
+      <td><span class="bd b-ei">${etapa}</span></td>
+      <td class="tss">${fmtDShort(a.f_aper)}</td>
+      <td style="font-weight:700;color:${grav};text-align:center">${a.dias} días</td>
+      <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${respColor(a.resp)}"></span>${a.resp||'—'}</span></td>
+      <td class="tss" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-style:italic">${a.obs_g||a.obs||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function sbDem(k){ if(demSortKey===k)demSortDir*=-1; else{demSortKey=k;demSortDir=(k==='dias')?-1:1;} renderDemorados(); }
+
+function exportDemorados(){
+  const umbral = Number(document.getElementById('demDias')?.value || 4);
+  const respFiltro = document.getElementById('demResp')?.value || '';
+  let lista = frentesDemorados(umbral);
+  if(respFiltro) lista = lista.filter(a=>(a.resp||'')===respFiltro);
+  if(!lista.length){ showToast('No hay frentes demorados para exportar'); return; }
+  const esc = v => { const s=String(v??''); return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const cols=['ACRE','DIRECCIÓN','ALTURA','COMUNA','M²','MATERIALIDAD','ETAPA','F.APERTURA','DÍAS DESDE APERTURA','RESPONSABLE','OBS'];
+  const filas=lista.map(a=>[a.id,a.dir,a.alt||'',a.com||'',a.area||0,a.mat||'',ETAPA_LABEL[Number(a.pct)]||a.pct+'%',a.f_aper||'',a.dias,a.resp||'',a.obs_g||a.obs||''].map(esc).join(','));
+  const csv='\uFEFF'+cols.join(',')+'\n'+filas.join('\n');
+  const el=document.createElement('a');el.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);el.download='frentes_demorados.csv';el.click();
+  showToast(`✓ ${lista.length} frentes demorados exportados`);
+}
+
+function exportXLSXDemorados(){
+  const umbral = Number(document.getElementById('demDias')?.value || 4);
+  const respFiltro = document.getElementById('demResp')?.value || '';
+  let lista = frentesDemorados(umbral);
+  if(respFiltro) lista = lista.filter(a=>(a.resp||'')===respFiltro);
+  if(!lista.length){ showToast('No hay frentes demorados para exportar'); return; }
+  const datos = lista.map(a=>({
+    'ACRE':a.id,'DIRECCIÓN':a.dir,'ALTURA':a.alt||'','COMUNA':a.com||'','M²':a.area||0,
+    'MATERIALIDAD':a.mat||'','ETAPA':ETAPA_LABEL[Number(a.pct)]||a.pct+'%',
+    'F.APERTURA':a.f_aper||'','DÍAS DESDE APERTURA':a.dias,'RESPONSABLE':a.resp||'','OBS':a.obs_g||a.obs||''
+  }));
+  exportXLSX(datos,'frentes_demorados','Demorados');
+  showToast(`✓ ${lista.length} frentes demorados exportados`);
+}
+
 // ─── LISTADO ─────────────────────────────────────────────────────
 let filtered=ALL.slice(),currentPage=1,PER=25,sortKey=null,sortDir=1;
-let fEv='',fRv='',fCv='',fMv='',searchV='';
+let fEv='',fRv='',fCv='',fMv='',fPv='',searchV='';
 function applyFilters(){
   filtered=ALL.filter(a=>{
     if(fEv){
@@ -2094,6 +2285,7 @@ function applyFilters(){
       // contadores del sidebar (deriva del pct), no el campo `estado` literal.
       if(clasificarFrente(a)!==fEv)return false;
     }
+    if(fPv!==''&&Number(a.pct||0)!==Number(fPv))return false;
     if(fRv&&(a.resp||'')!==fRv)return false;
     if(fCv&&String(a.com||'')!==fCv)return false;
     if(fMv&&(a.mat||'')!==fMv)return false;
@@ -2124,9 +2316,10 @@ function fE(v){fEv=v;applyFilters();}
 function fR(v){fRv=v;applyFilters();}
 function fC(v){fCv=v;applyFilters();}
 function fM(v){fMv=v;applyFilters();}
+function fP(v){fPv=v;applyFilters();}
 function sb(k){if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=1;}applyFilters();}
-function clearF(){fEv=fRv=fCv=fMv=searchV='';['searchBox','fEstado','fResp','fComuna','fMat'].forEach(id=>{document.getElementById(id).value='';});applyFilters();}
-function qf(estado,el){fEv=estado;fRv='';fCv='';fMv='';searchV='';document.getElementById('fEstado').value=estado;goTo('lista',null);document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));if(el)el.classList.add('active');applyFilters();}
+function clearF(){fEv=fRv=fCv=fMv=fPv=searchV='';['searchBox','fEstado','fResp','fComuna','fMat','fPct'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});applyFilters();}
+function qf(estado,el){fEv=estado;fRv='';fCv='';fMv='';fPv='';searchV='';document.getElementById('fEstado').value=estado;const fp=document.getElementById('fPct');if(fp)fp.value='';goTo('lista',null);document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));if(el)el.classList.add('active');applyFilters();}
 function fillMatSelect(){const mats=[...new Set(ALL.map(a=>a.mat).filter(Boolean))].sort();const sel=document.getElementById('fMat');sel.innerHTML='<option value="">Todas las materialidades</option>';mats.forEach(m=>sel.innerHTML+=`<option value="${m}">${m}</option>`);}
 function fillComSelect(){const coms=[...new Set(ALL.map(a=>String(a.com||'')).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));const sel=document.getElementById('fComuna');sel.innerHTML='<option value="">Todas las comunas</option>';coms.forEach(c=>sel.innerHTML+=`<option value="${c}">Comuna ${c}</option>`);}
 // Lista de responsables unificada: combina los definidos localmente (RESPS) con TODOS
@@ -2237,14 +2430,12 @@ function exportXLSXCert() {
 }
 
 function exportXLSXParaMedir() {
-  // Frentes finalizados (100%) sin fecha de medición
-  const datos = ALL.filter(a =>
-    (a.pct >= 99 || a.estado === 'EJECUTADO') && !a.f_med && a.estado !== 'ANULADA'
-  ).map(a => ({
+  // Frentes medibles (finalizados 100% o al 98% con observaciones) sin fecha de medición
+  const datos = ALL.filter(a => esMedible(a) && !a.f_med).map(a => ({
     'ACRE': a.id, 'DIRECCIÓN': a.dir, 'ALTURA': a.alt||'',
     'COMUNA': a.com||'', 'M²': a.area||0,
     'MATERIALIDAD': a.mat||'', 'RESPONSABLE': a.resp||'',
-    'F.FIN': a.f_fin||'', 'OBS': a.obs_g||''
+    'F.FIN': a.f_fin||'', '%': a.pct, 'OBS': a.obs_g||''
   }));
   if (!datos.length) { showToast('No hay frentes pendientes de medición'); return; }
   exportXLSX(datos, 'para_medir', 'Para medir');
@@ -2329,7 +2520,7 @@ function openModal(id){
 function closeModal(){document.getElementById('modal').classList.remove('open');}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
 
-const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],mapa:['Mapa de frentes','Frentes activos con geocodificación'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas de responsables'],asig:['Asignación de frentes','Asignar responsables y publicar a la app'],import:['Importar Excel','Cargar frentes desde planilla']};
+const PAGES={parte:['Parte diario','Frentes activos agrupados por responsable'],hormigon:['Parte de hormigón','Registro de viajes y frentes abastecidos'],cert:['Certificación mensual','m² disponibles para certificar por mes'],demorados:['Frentes demorados','Frentes aperturados hace más días del umbral, sin finalizar'],dash:['Dashboard m²','Resumen de superficie por estado y materialidad'],mapa:['Mapa de frentes','Frentes activos con geocodificación'],lista:['Listado de frentes','Todos los frentes con filtros avanzados'],config:['Responsables','Alta, baja y estadísticas de responsables'],asig:['Asignación de frentes','Asignar responsables y publicar a la app'],import:['Importar Excel','Cargar frentes desde planilla']};
 function goTo(p,el){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
@@ -2347,6 +2538,7 @@ function goTo(p,el){
     else renderHormigon();
   }
   if(p==='cert') initCert();
+  if(p==='demorados') initDemorados();
   if(p==='dash') initDash();
   if(p==='mapa') initMapa();
   if(p==='lista'&&!document.getElementById('tbody').children.length) renderTable();
