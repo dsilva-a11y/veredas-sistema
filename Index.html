@@ -418,14 +418,25 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         </div>
       </div>
 
-      <!-- 2c. RESUMEN POR PERÍODO: avance real vs certificado, por número de período -->
-      <div class="panel" style="margin-bottom:12px">
-        <div class="ph" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span class="pt">📊 Resumen por período — Avance vs Certificado</span>
-          <button class="btn bg" onclick="exportResumenPeriodo()" style="margin-left:auto;font-size:11px">↓ CSV</button>
+      <!-- 2c. HISTÓRICO POR PERÍODO: dos ejes independientes -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <!-- AVANCE ejecutado -->
+        <div class="panel" style="border-top:3px solid var(--blue)">
+          <div class="ph" style="display:flex;align-items:center;gap:8px">
+            <span class="pt" style="color:var(--blue)">🔷 Avance ejecutado</span>
+            <button class="btn bg" onclick="exportPeriodoEje('avance')" style="margin-left:auto;font-size:11px">↓ CSV</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes terminados imputados a cada período (columna "Avance real" de la planilla)</div>
+          <div class="pb2" style="padding:0"><div id="avancePeriodoTabla"></div></div>
         </div>
-        <div class="pb2" style="padding:0">
-          <div id="resumenPeriodoContenido"></div>
+        <!-- CERTIFICADO -->
+        <div class="panel" style="border-top:3px solid var(--green)">
+          <div class="ph" style="display:flex;align-items:center;gap:8px">
+            <span class="pt" style="color:var(--green)">✅ Certificado</span>
+            <button class="btn bg" onclick="exportPeriodoEje('cert')" style="margin-left:auto;font-size:11px">↓ CSV</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes cobrados en cada período (columna "CERTIFICADOS" de la planilla)</div>
+          <div class="pb2" style="padding:0"><div id="certPeriodoTabla"></div></div>
         </div>
       </div>
 
@@ -2005,83 +2016,109 @@ function initCertPeriodo(){
   renderCertPeriodo();
 }
 
-// Tabla resumen: para cada número de período, cuánto se EJECUTÓ (avance_periodo) y cuánto
-// se CERTIFICÓ (cert_periodo), como dos ejes independientes. Para un mes cerrado el avance
-// sale de la columna "Avance real", NO del % actual del frente (que puede haber cambiado).
-function resumenPorPeriodo(){
+// Histórico por período: AVANCE y CERTIFICADO son ejes 100% independientes.
+// Ambos salen EXCLUSIVAMENTE de los números cargados en la planilla (avance_periodo /
+// cert_periodo). NUNCA se mira el % actual del frente ni si está "en ejecución": el avance
+// de un mes cerrado es una imputación manual (balanceo) que hizo el usuario en la planilla.
+function periodoPorEje(eje){
+  // eje: 'avance' -> agrupa por avance_periodo | 'cert' -> agrupa por cert_periodo
+  const campo = eje==='avance' ? 'avance_periodo' : 'cert_periodo';
   const noAnulado = a => (a.estado||'').toUpperCase()!=='ANULADA';
-  const filas = {}; // periodo -> {avM2,avN,certM2,certN}
-  const get = p => { if(!filas[p]) filas[p]={avM2:0,avN:0,certM2:0,certN:0}; return filas[p]; };
+  const filas = {};
   ALL.forEach(a=>{
     if(!noAnulado(a)) return;
-    const area = a.area||0;
-    if(Number.isFinite(a.avance_periodo)){ const f=get(a.avance_periodo); f.avM2+=area; f.avN++; }
-    if(Number.isFinite(a.cert_periodo)){ const f=get(a.cert_periodo); f.certM2+=area; f.certN++; }
+    const p = a[campo];
+    if(!Number.isFinite(p)) return;         // solo lo cargado en la planilla
+    if(!filas[p]) filas[p]={m2:0,n:0,frentes:[]};
+    filas[p].m2 += (a.area||0);
+    filas[p].n++;
+    filas[p].frentes.push(a);
   });
   return Object.keys(filas).map(Number).sort((x,y)=>y-x).map(p=>({periodo:p, ...filas[p]}));
 }
 
-function renderResumenPeriodo(){
-  const cont = document.getElementById('resumenPeriodoContenido');
-  if(!cont) return;
-  const filas = resumenPorPeriodo();
+function tablaPeriodoEje(eje){
+  const color = eje==='avance' ? 'var(--blue)' : 'var(--green)';
+  const filas = periodoPorEje(eje);
   if(!filas.length){
-    cont.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:14px 16px">Sin datos de período. Cargá certificado/avance por el import de certificados o editando cada frente.</div>';
-    return;
+    return `<div style="color:var(--text3);font-size:12px;padding:14px 16px">Sin datos cargados. Imputá el ${eje==='avance'?'avance':'certificado'} de cada frente por el import de certificados o editando el frente.</div>`;
   }
-  const totAvM2 = filas.reduce((s,f)=>s+f.avM2,0), totAvN = filas.reduce((s,f)=>s+f.avN,0);
-  const totCertM2 = filas.reduce((s,f)=>s+f.certM2,0), totCertN = filas.reduce((s,f)=>s+f.certN,0);
-  cont.innerHTML = `
+  const totM2 = filas.reduce((s,f)=>s+f.m2,0), totN = filas.reduce((s,f)=>s+f.n,0);
+  return `
     <table style="width:100%;border-collapse:collapse;font-size:12.5px">
       <thead><tr style="color:var(--text3);text-align:left;border-bottom:1px solid var(--line)">
         <th style="padding:8px 14px">Período</th>
-        <th style="padding:8px 14px;text-align:center;color:var(--blue)" colspan="2">🔷 Avance ejecutado</th>
-        <th style="padding:8px 14px;text-align:center;color:var(--green)" colspan="2">✅ Certificado</th>
-        <th style="padding:8px 14px;text-align:right">Diferencia m²</th>
-      </tr>
-      <tr style="color:var(--text3);font-size:11px;border-bottom:1px solid var(--line)">
-        <th style="padding:4px 14px"></th>
-        <th style="padding:4px 14px;text-align:right">frentes</th><th style="padding:4px 14px;text-align:right">m²</th>
-        <th style="padding:4px 14px;text-align:right">frentes</th><th style="padding:4px 14px;text-align:right">m²</th>
-        <th style="padding:4px 14px;text-align:right">(cert − avance)</th>
+        <th style="padding:8px 14px;text-align:right">Frentes</th>
+        <th style="padding:8px 14px;text-align:right">m²</th>
+        <th style="padding:8px 14px;text-align:right">% del total</th>
       </tr></thead>
       <tbody>
         ${filas.map(f=>{
-          const dif = f.certM2 - f.avM2;
-          const difColor = dif>0?'var(--green)':dif<0?'var(--accent)':'var(--text3)';
-          return `<tr style="border-bottom:1px solid var(--line)">
+          const pctTot = totM2>0 ? (f.m2/totM2*100) : 0;
+          return `<tr style="border-bottom:1px solid var(--line);cursor:pointer" onclick="verFrentesPeriodo('${eje}',${f.periodo})">
             <td style="padding:8px 14px;font-weight:700;color:var(--text)">Cert. ${f.periodo}</td>
-            <td style="padding:8px 14px;text-align:right;color:var(--text2)">${f.avN}</td>
-            <td style="padding:8px 14px;text-align:right;color:var(--blue);font-weight:600">${fmt(f.avM2)}</td>
-            <td style="padding:8px 14px;text-align:right;color:var(--text2)">${f.certN}</td>
-            <td style="padding:8px 14px;text-align:right;color:var(--green);font-weight:600">${fmt(f.certM2)}</td>
-            <td style="padding:8px 14px;text-align:right;color:${difColor}">${dif>0?'+':''}${fmt(dif)}</td>
+            <td style="padding:8px 14px;text-align:right;color:var(--text2)">${f.n}</td>
+            <td style="padding:8px 14px;text-align:right;color:${color};font-weight:600">${fmt(f.m2)}</td>
+            <td style="padding:8px 14px;text-align:right;color:var(--text3)">${pctTot.toFixed(1)}%</td>
           </tr>`;
         }).join('')}
       </tbody>
       <tfoot><tr style="border-top:2px solid var(--line);font-weight:700">
         <td style="padding:10px 14px">TOTAL</td>
-        <td style="padding:10px 14px;text-align:right">${totAvN}</td>
-        <td style="padding:10px 14px;text-align:right;color:var(--blue)">${fmt(totAvM2)}</td>
-        <td style="padding:10px 14px;text-align:right">${totCertN}</td>
-        <td style="padding:10px 14px;text-align:right;color:var(--green)">${fmt(totCertM2)}</td>
-        <td style="padding:10px 14px;text-align:right;color:var(--text3)">${fmt(totCertM2-totAvM2)}</td>
+        <td style="padding:10px 14px;text-align:right">${totN}</td>
+        <td style="padding:10px 14px;text-align:right;color:${color}">${fmt(totM2)}</td>
+        <td style="padding:10px 14px;text-align:right;color:var(--text3)">100%</td>
       </tr></tfoot>
-    </table>
-    <div style="font-size:11px;color:var(--text3);padding:8px 14px">
-      <strong>Avance</strong> = frentes con ese número en la columna "Avance real". <strong>Certificado</strong> = frentes con ese número en "CERTIFICADOS". Los anulados no se cuentan.
-    </div>`;
+    </table>`;
 }
 
-function exportResumenPeriodo(){
-  const filas = resumenPorPeriodo();
-  if(!filas.length){ showToast('Sin datos de período para exportar'); return; }
+function renderResumenPeriodo(){
+  const av = document.getElementById('avancePeriodoTabla');
+  const ce = document.getElementById('certPeriodoTabla');
+  if(av) av.innerHTML = tablaPeriodoEje('avance');
+  if(ce) ce.innerHTML = tablaPeriodoEje('cert');
+}
+
+// Ver el detalle de frentes de un período/eje en un modal
+function verFrentesPeriodo(eje, periodo){
+  const filas = periodoPorEje(eje).find(f=>f.periodo===periodo);
+  if(!filas) return;
+  const titulo = eje==='avance' ? `Avance ejecutado — Cert. ${periodo}` : `Certificado — Cert. ${periodo}`;
+  const color = eje==='avance' ? 'var(--blue)' : 'var(--green)';
+  const rows = filas.frentes.slice().sort((a,b)=>(b.area||0)-(a.area||0)).map(a=>`
+    <tr onclick="closeHistModal();openModal('${a.id}')" style="cursor:pointer;border-top:1px solid var(--line)">
+      <td style="padding:6px 12px;color:var(--accent);font-weight:600">${a.id}</td>
+      <td style="padding:6px 12px">${a.dir} ${a.alt||''}</td>
+      <td style="padding:6px 12px;text-align:right">${(a.area||0).toFixed(1)}</td>
+      <td style="padding:6px 12px;text-align:center">${a.pct}%</td>
+      <td style="padding:6px 12px">${a.resp||'—'}</td>
+    </tr>`).join('');
+  const modal = document.getElementById('hist-modal');
+  document.getElementById('histLista').innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:${color};padding:0 4px 10px">${titulo} · ${filas.n} frentes · ${fmt(filas.m2)} m²</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:var(--text3);text-align:left"><th style="padding:6px 12px">Acre</th><th style="padding:6px 12px">Dirección</th><th style="padding:6px 12px;text-align:right">m²</th><th style="padding:6px 12px;text-align:center">%</th><th style="padding:6px 12px">Resp.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  document.getElementById('histBuscar').style.display='none';
+  modal.style.display = 'flex';
+}
+function closeHistModal(){ const m=document.getElementById('hist-modal'); if(m)m.style.display='none'; const b=document.getElementById('histBuscar'); if(b)b.style.display=''; }
+
+function exportPeriodoEje(eje){
+  const filas = periodoPorEje(eje);
+  if(!filas.length){ showToast('Sin datos para exportar'); return; }
   const esc = v => { const s=String(v??''); return /[",\n;]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
-  const cols = ['PERÍODO','AVANCE_FRENTES','AVANCE_M2','CERT_FRENTES','CERT_M2','DIFERENCIA_M2'];
-  const body = filas.map(f=>[f.periodo,f.avN,f.avM2.toFixed(1),f.certN,f.certM2.toFixed(1),(f.certM2-f.avM2).toFixed(1)].map(esc).join(','));
+  // export detallado: una fila por frente, con su período
+  const cols = ['PERÍODO','ACRE','DIRECCIÓN','M2','%','RESPONSABLE'];
+  const body = [];
+  filas.forEach(f=>f.frentes.forEach(a=>{
+    body.push([f.periodo,a.id,`${a.dir} ${a.alt||''}`.trim(),(a.area||0).toFixed(1),a.pct,a.resp||''].map(esc).join(','));
+  }));
   const csv = '\uFEFF'+cols.join(',')+'\n'+body.join('\n');
-  const el=document.createElement('a');el.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);el.download='resumen_por_periodo.csv';el.click();
-  showToast(`✓ Resumen por período exportado (${filas.length} períodos)`);
+  const nombre = eje==='avance' ? 'avance_por_periodo' : 'certificado_por_periodo';
+  const el=document.createElement('a');el.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);el.download=nombre+'.csv';el.click();
+  showToast(`✓ ${eje==='avance'?'Avance':'Certificado'} exportado (${body.length} frentes)`);
 }
 
 function renderCertPeriodo(){

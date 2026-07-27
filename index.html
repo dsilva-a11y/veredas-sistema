@@ -1034,10 +1034,10 @@ async function updateAcresDataJson(p, token) {
     obs: p.observaciones || v?.obs || '',
     obs_g: v?.obs_g || '',
     f_prog: v?.f_prog || null,
-    f_aper: p.estadoNuevo === 'Apertura' ? (v?.f_aper || hoy) : (v?.f_aper || null),
-    f_horm: p.estadoNuevo === 'Hormigonado' ? (v?.f_horm || hoy) : (v?.f_horm || null),
-    f_col: p.estadoNuevo === 'Colocación' ? (v?.f_col || hoy) : (v?.f_col || null),
-    f_fin: p.estadoNuevo === 'Finalizado' ? (v?.f_fin || hoy) : (v?.f_fin || null),
+    f_aper: (p.estadoNuevo === 'APERTURA'    || p.estadoNuevo === 'Apertura')     ? (v?.f_aper || hoy) : (v?.f_aper || null),
+    f_horm: (p.estadoNuevo === 'HORMIGONADO' || p.estadoNuevo === 'Hormigonado')  ? (v?.f_horm || hoy) : (v?.f_horm || null),
+    f_col:  (p.estadoNuevo === 'BALDOSAS'    || p.estadoNuevo === 'Colocación')   ? (v?.f_col || hoy)  : (v?.f_col || null),
+    f_fin:  (p.estadoNuevo === 'FINALIZADO'  || p.estadoNuevo === 'Finalizado')   ? (v?.f_fin || hoy)  : (v?.f_fin || null),
     f_med: v?.f_med || null,
     _updated: new Date().toISOString(),
   };
@@ -1178,13 +1178,13 @@ async function updateSheetRow(p, token) {
   ];
 
   // Actualizar fecha según etapa
-  if (p.estadoNuevo === 'Apertura' && !v.f_aper)
+  if ((p.estadoNuevo === 'APERTURA' || p.estadoNuevo === 'Apertura') && !v.f_aper)
     updates.push({ range: `${sheetName}!N${rowNum}`, values: [[hoy]] });
-  if (p.estadoNuevo === 'Hormigonado' && !v.f_horm)
+  if ((p.estadoNuevo === 'HORMIGONADO' || p.estadoNuevo === 'Hormigonado') && !v.f_horm)
     updates.push({ range: `${sheetName}!O${rowNum}`, values: [[hoy]] });
-  if (p.estadoNuevo === 'Colocación' && !v.f_col)
+  if ((p.estadoNuevo === 'BALDOSAS' || p.estadoNuevo === 'Colocación') && !v.f_col)
     updates.push({ range: `${sheetName}!P${rowNum}`, values: [[hoy]] });
-  if (p.estadoNuevo === 'Finalizado' && !v.f_fin)
+  if ((p.estadoNuevo === 'FINALIZADO' || p.estadoNuevo === 'Finalizado') && !v.f_fin)
     updates.push({ range: `${sheetName}!Q${rowNum}`, values: [[hoy]] });
   if (p.observaciones)
     updates.push({ range: `${sheetName}!J${rowNum}`, values: [[p.observaciones]] });
