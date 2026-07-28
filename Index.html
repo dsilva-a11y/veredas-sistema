@@ -194,6 +194,9 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
 .month-tab:last-child{border-right:none;}
 .month-tab:hover{color:var(--text2);}
 .month-tab.active{color:var(--text);background:var(--bg4);}
+.cert-tab{padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;transition:all .15s;user-select:none;}
+.cert-tab:hover{color:var(--text2);}
+.cert-tab.active{color:var(--text);border-bottom-color:var(--accent);}
 
 ::-webkit-scrollbar{width:4px;height:4px;}
 ::-webkit-scrollbar-track{background:var(--bg2);}
@@ -395,18 +398,18 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
       <!-- 2. KPIs certificacion -->
       <div class="kr3" id="certKpis" style="margin-bottom:12px"></div>
 
-      <!-- 2b. ESTIMADOR DE CERTIFICACIÓN POR PERÍODO -->
-      <div class="panel" style="margin-bottom:12px;border:1.5px solid rgba(79,163,232,.3)">
-        <div class="ph" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span class="pt">📑 Estimador de certificación</span>
-          <select class="sf" id="certPeriodoSel" onchange="renderCertPeriodo()" style="width:auto;font-size:12px"></select>
-          <span style="font-size:11px;color:var(--text3);margin-left:auto">Cuánto podés certificar según en qué momento del mes estás</span>
+      <!-- 2b. MÓDULO CERTIFICACIÓN POR PERÍODO — 3 solapas -->
+      <div class="panel" style="margin-bottom:12px">
+        <div style="display:flex;border-bottom:1px solid var(--line)">
+          <div class="cert-tab active" id="ctab-est" onclick="switchCertTab('est')">📑 Estimador (mes en curso)</div>
+          <div class="cert-tab" id="ctab-av" onclick="switchCertTab('av')">🔷 Avance</div>
+          <div class="cert-tab" id="ctab-ce" onclick="switchCertTab('ce')">✅ Certificado</div>
         </div>
-        <div class="pb2" style="padding:14px 16px">
-          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
-            Tildá qué etapas del período actual contás como certificables
-            <span style="color:var(--text3)">(a principio de mes tildás todo; a fin de mes destildás lo que no va a llegar)</span>:
-          </div>
+
+        <!-- SOLAPA ESTIMADOR -->
+        <div id="cpane-est" class="cert-pane" style="padding:14px 16px">
+          <div id="estimadorHeader" style="font-size:12.5px;color:var(--text2);margin-bottom:10px"></div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Tildá qué etapas del mes en curso contás como certificables <span style="color:var(--text3)">(a principio de mes tildás todo; a fin de mes destildás lo que no va a llegar)</span>:</div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--bg3);border-radius:8px">
             <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="certEtapaChk" value="25" onchange="renderCertPeriodo()"> Apertura (25%)</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="certEtapaChk" value="50" checked onchange="renderCertPeriodo()"> Hormigonado (50%)</label>
@@ -416,26 +419,24 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </div>
           <div id="certPeriodoContenido"></div>
         </div>
-      </div>
 
-      <!-- 2c. HISTÓRICO POR PERÍODO: dos ejes independientes -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-        <!-- AVANCE ejecutado -->
-        <div class="panel" style="border-top:3px solid var(--blue)">
+        <!-- SOLAPA AVANCE -->
+        <div id="cpane-av" class="cert-pane" style="display:none">
           <div class="ph" style="display:flex;align-items:center;gap:8px">
-            <span class="pt" style="color:var(--blue)">🔷 Avance ejecutado</span>
+            <span class="pt" style="color:var(--blue)">🔷 Avance ejecutado por período</span>
             <button class="btn bg" onclick="exportPeriodoEje('avance')" style="margin-left:auto;font-size:11px">↓ CSV</button>
           </div>
-          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes terminados imputados a cada período (columna "Avance real" de la planilla)</div>
+          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes terminados imputados a cada período (columna "Avance real" de la planilla). Cada período muestra a qué mes corresponde.</div>
           <div class="pb2" style="padding:0"><div id="avancePeriodoTabla"></div></div>
         </div>
-        <!-- CERTIFICADO -->
-        <div class="panel" style="border-top:3px solid var(--green)">
+
+        <!-- SOLAPA CERTIFICADO -->
+        <div id="cpane-ce" class="cert-pane" style="display:none">
           <div class="ph" style="display:flex;align-items:center;gap:8px">
-            <span class="pt" style="color:var(--green)">✅ Certificado</span>
+            <span class="pt" style="color:var(--green)">✅ Certificado por período</span>
             <button class="btn bg" onclick="exportPeriodoEje('cert')" style="margin-left:auto;font-size:11px">↓ CSV</button>
           </div>
-          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes cobrados en cada período (columna "CERTIFICADOS" de la planilla)</div>
+          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes cobrados en cada período (columna "CERTIFICADOS" de la planilla).</div>
           <div class="pb2" style="padding:0"><div id="certPeriodoTabla"></div></div>
         </div>
       </div>
@@ -1290,6 +1291,20 @@ async function publicarAsignaciones(silencioso = false) {
 }
 
 // ─── IMPORTAR EXCEL ───────────────────────────────────────────────
+// Normaliza un nombre de calle para comparar: saca tildes, tipos de vía (AV/AVENIDA/CALLE),
+// puntuación y espacios extra. Así "MITRE AV." y "Mitre" quedan iguales para el chequeo.
+function normalizarCalle(s){
+  return String(s||'')
+    .toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // saca tildes
+    .replace(/\b(AV|AVDA|AVENIDA|CALLE|PJE|PASAJE|DIAG|DIAGONAL|BV|BLVD|BOULEVARD)\b/g,' ')
+    .replace(/[.,]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+// Guarda temporalmente los frentes dudosos a la espera de decisión manual
+let _altasDudosas = [];
+
 async function importarExcel(input) {
   const file = input.files[0];
   if (!file) return;
@@ -1304,51 +1319,150 @@ async function importarExcel(input) {
     // Mapear columnas flexiblemente
     const colMap = { id: ['ID','id','ACRE','acre'], dir: ['DIRECCIÓN','DIRECCION','DIR','dir','dirección'], alt: ['ALTURA','altura','ALT','alt','ALTO'], com: ['COMUNA','COM','com','comuna'], area: ['AREA','ÁREA','M2','M²','area','área'], interv: ['INTERV','INTERVENCIÓN','interv'], mat: ['MAT','MATERIALIDAD','mat','materialidad'] };
     function getCol(row, keys) { for (const k of keys) { if (row[k] !== undefined && row[k] !== '') return row[k]; } return ''; }
+
+    // Índice de lo que YA existe, para chequear duplicados
+    const porId = {};
+    const porCalleAlt = {}; // clave: calleNormalizada|altura -> frente existente
+    ALL.forEach(a => {
+      porId[a.id] = a;
+      const k = normalizarCalle(a.dir) + '|' + String(a.alt||'').trim();
+      if (normalizarCalle(a.dir)) (porCalleAlt[k] = porCalleAlt[k] || []).push(a);
+    });
+
     let added = 0, updated = 0, errors = 0;
-    rows.forEach(row => {
+    _altasDudosas = [];
+    // También detectar duplicados DENTRO del propio Excel
+    const vistosId = {}, vistosCalleAlt = {};
+
+    rows.forEach((row, i) => {
       const id = String(getCol(row, colMap.id)).trim().toUpperCase();
       if (!id) { errors++; return; }
-      const existing = ALL.find(a => a.id === id);
+      const dir = String(getCol(row, colMap.dir)).trim();
+      const alt = String(getCol(row, colMap.alt)).trim();
       const frente = {
-        id,
-        dir: String(getCol(row, colMap.dir)).trim(),
-        alt: String(getCol(row, colMap.alt)).trim(),
+        id, dir, alt,
         com: String(getCol(row, colMap.com)).trim(),
         area: parseFloat(getCol(row, colMap.area)) || 0,
         interv: String(getCol(row, colMap.interv)).trim(),
         mat: String(getCol(row, colMap.mat)).trim(),
-        estado: existing?.estado || '-',
-        pct: existing?.pct ?? 0,
-        resp: existing?.resp || '',
-        obs: existing?.obs || '',
-        obs_g: existing?.obs_g || '',
-        f_prog: existing?.f_prog || null,
-        f_aper: existing?.f_aper || null,
-        f_horm: existing?.f_horm || null,
-        f_col: existing?.f_col || null,
-        f_fin: existing?.f_fin || null,
-        f_med: existing?.f_med || null,
-        cert_periodo:   existing?.cert_periodo   ?? null,
-        avance_periodo: existing?.avance_periodo ?? null,
-        _updated: new Date().toISOString(),
-        _editado: true,
+        estado: '-', pct: 0, resp: '', obs: '', obs_g: '',
+        f_prog:null,f_aper:null,f_horm:null,f_col:null,f_fin:null,f_med:null,
+        cert_periodo:null, avance_periodo:null,
+        _updated: new Date().toISOString(), _editado: true,
       };
-      if (existing) { Object.assign(existing, frente); updated++; }
-      else { ALL.push(frente); added++; }
+
+      // ── Chequeos de duplicado ──
+      const motivos = [];
+      const claveCalleAlt = normalizarCalle(dir) + '|' + alt;
+      // 1) Acre repetido (ya en la base)
+      if (porId[id]) motivos.push({tipo:'acre', ref:`Acre ${id} ya existe: ${porId[id].dir} ${porId[id].alt||''}`});
+      // 2) Misma calle + altura (ya en la base), aunque el acre sea otro
+      if (normalizarCalle(dir) && porCalleAlt[claveCalleAlt]) {
+        const otros = porCalleAlt[claveCalleAlt].filter(x=>x.id!==id);
+        if (otros.length) motivos.push({tipo:'dir', ref:`Misma dirección que: ${otros.map(o=>o.id).join(', ')} (${dir} ${alt})`});
+      }
+      // 3) Repetido dentro del mismo Excel
+      if (vistosId[id]) motivos.push({tipo:'acre-excel', ref:`Acre ${id} repetido dentro del Excel`});
+      if (normalizarCalle(dir) && vistosCalleAlt[claveCalleAlt]) motivos.push({tipo:'dir-excel', ref:`Dirección repetida dentro del Excel (fila ${vistosCalleAlt[claveCalleAlt]})`});
+      vistosId[id] = true;
+      if (normalizarCalle(dir)) vistosCalleAlt[claveCalleAlt] = i+2; // +2: fila de Excel (1=header)
+
+      if (motivos.length) {
+        // Dudoso: no importar, dejar para decisión manual
+        _altasDudosas.push({ frente, motivos, existente: porId[id] || null });
+      } else if (porId[id]) {
+        // No debería pasar (si está en porId iría a motivos), pero por las dudas actualiza
+        Object.assign(porId[id], frente); updated++;
+      } else {
+        // Limpio: alta directa
+        ALL.push(frente);
+        porId[id] = frente;
+        (porCalleAlt[claveCalleAlt] = porCalleAlt[claveCalleAlt] || []).push(frente);
+        added++;
+      }
     });
-    result.innerHTML = `<span style="color:var(--green)">✓ ${added} frentes nuevos agregados · ${updated} actualizados · ${errors} errores</span>`;
+
     saveData();
     applyFilters(); actualizarBadges(); initDash(); initCert();
-    // Igual que la Planilla Madre: marcar pendiente para que la próxima "Sincronizar" publique en Drive
     if (added + updated > 0) {
       _importacionPendiente = true;
       updateSyncBar(`⚠ Importación lista (${added + updated} frentes) — Sincronizá para publicar en Drive`, 'var(--yellow)');
     }
-    showToast(`Importación completa: ${added} nuevos, ${updated} actualizados — Sincronizá para publicar en Drive`);
+
+    // Reporte
+    let html = `<div style="background:var(--bg3);border:1px solid var(--green);border-radius:4px;padding:10px;margin-bottom:10px">
+      <span style="color:var(--green);font-weight:700">✓ ${added} frentes nuevos dados de alta</span>
+      <span style="color:var(--text3)"> · ${updated} actualizados · ${errors} sin acre</span></div>`;
+    if (_altasDudosas.length) {
+      html += `<div style="background:var(--bg3);border:1px solid var(--yellow);border-radius:4px;padding:12px">
+        <div style="color:var(--yellow);font-weight:700;font-size:13px;margin-bottom:4px">⚠ ${_altasDudosas.length} posibles duplicados — revisá y decidí</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px">No se dieron de alta. Chequeá cada uno: si es un frente válido distinto, dale "Dar de alta igual"; si es repetido, "Descartar".</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn bp" onclick="resolverTodasDudosas(true)" style="font-size:11px">✓ Dar de alta todos</button>
+          <button class="btn bg" onclick="resolverTodasDudosas(false)" style="font-size:11px">✕ Descartar todos</button>
+        </div>
+        <div id="dudososLista"></div>
+      </div>`;
+    }
+    result.innerHTML = html;
+    if (_altasDudosas.length) renderDudosos();
+    showToast(`${added} altas · ${_altasDudosas.length} dudosos para revisar`);
   } catch(e) {
     result.innerHTML = `<span style="color:var(--accent)">Error: ${e.message}</span>`;
   }
   input.value = '';
+}
+
+function renderDudosos(){
+  const cont = document.getElementById('dudososLista');
+  if(!cont) return;
+  if(!_altasDudosas.length){ cont.innerHTML = '<div style="color:var(--green);font-size:12px">✓ Todos resueltos.</div>'; return; }
+  cont.innerHTML = _altasDudosas.map((d,i)=>`
+    <div style="border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:8px;background:var(--bg2)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+        <div style="flex:1">
+          <div style="font-weight:700;color:var(--accent);font-size:13px">${d.frente.id} — ${d.frente.dir} ${d.frente.alt||''}</div>
+          <div style="font-size:11px;color:var(--text3)">Área: ${d.frente.area||0} m² · Comuna: ${d.frente.com||'—'}</div>
+          ${d.motivos.map(m=>`<div style="font-size:11px;color:var(--yellow);margin-top:3px">⚠ ${m.ref}</div>`).join('')}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          <button class="btn bp" onclick="resolverDudoso(${i},true)" style="font-size:11px;white-space:nowrap">✓ Dar de alta igual</button>
+          <button class="btn bg" onclick="resolverDudoso(${i},false)" style="font-size:11px;white-space:nowrap">✕ Descartar</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function resolverDudoso(i, darDeAlta){
+  const d = _altasDudosas[i];
+  if(!d) return;
+  if(darDeAlta){
+    // Si el acre ya existe, no duplicar el id: avisar y no agregar
+    if(ALL.find(a=>a.id===d.frente.id)){
+      showToast(`⚠ ${d.frente.id} ya existe en la base — no se puede duplicar el acre`);
+    } else {
+      ALL.push(d.frente);
+      saveData(); applyFilters(); actualizarBadges(); initDash(); initCert();
+      _importacionPendiente = true;
+      showToast(`✓ ${d.frente.id} dado de alta`);
+    }
+  }
+  _altasDudosas.splice(i,1);
+  renderDudosos();
+}
+
+function resolverTodasDudosas(darDeAlta){
+  if(darDeAlta){
+    let n=0;
+    _altasDudosas.forEach(d=>{ if(!ALL.find(a=>a.id===d.frente.id)){ ALL.push(d.frente); n++; } });
+    saveData(); applyFilters(); actualizarBadges(); initDash(); initCert();
+    if(n>0) _importacionPendiente = true;
+    showToast(`✓ ${n} frentes dados de alta`);
+  } else {
+    showToast(`✕ ${_altasDudosas.length} descartados`);
+  }
+  _altasDudosas = [];
+  renderDudosos();
 }
 
 // ─── EDITAR AVANCE DESDE MODAL ───────────────────────────────────
@@ -1978,14 +2092,27 @@ function initCert(){
   initCertPeriodo();
 }
 
-// ─── CERTIFICACIÓN POR PERÍODO DE CERTIFICADO ─────────────────────
+// ─── CERTIFICACIÓN POR PERÍODO ────────────────────────────────────
 // Modelo de la Planilla Madre: cada frente tiene DOS números de certificado de obra:
-//   avance_periodo = en qué certificado se EJECUTÓ realmente
-//   cert_periodo   = en qué certificado se CERTIFICA/cobra (puede ser posterior o anterior)
-// Un frente terminado en el certificado 9 pero cobrado en el 10 tiene avance=9, cert=10.
-// Esto permite responder: para el certificado N, ¿cuánto voy a certificar (todo lo que
-// se cobra en N) vs cuánto ejecuté realmente (todo lo que se hizo en N)?
-let certPeriodoSel = null;
+//   avance_periodo = en qué certificado se EJECUTÓ realmente (imputación manual/balanceo)
+//   cert_periodo   = en qué certificado se CERTIFICA/cobra
+// Mapeo fijo: Certificado 1 = septiembre 2023. Cada +1 es el mes calendario siguiente.
+const PERIODO_BASE = { anio: 2023, mes: 9 }; // período 1 = sept 2023
+const MESES_ES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function periodoAMes(p){
+  if(!Number.isFinite(p)) return '';
+  const totalMes = (PERIODO_BASE.mes - 1) + (p - 1); // meses desde ene-2023
+  const anio = PERIODO_BASE.anio + Math.floor(totalMes/12);
+  const mes = totalMes % 12; // 0-11
+  return `${MESES_ES[mes]} ${anio}`;
+}
+
+// Período del mes EN CURSO, calculado por la fecha real de hoy. Nunca inventa períodos futuros.
+function periodoActual(){
+  const hoy = new Date();
+  return (hoy.getFullYear() - PERIODO_BASE.anio)*12 + (hoy.getMonth()+1 - PERIODO_BASE.mes) + 1;
+}
 
 function periodosDisponibles(){
   const set = new Set();
@@ -1993,27 +2120,26 @@ function periodosDisponibles(){
     if(Number.isFinite(a.cert_periodo)) set.add(a.cert_periodo);
     if(Number.isFinite(a.avance_periodo)) set.add(a.avance_periodo);
   });
-  const arr = [...set];
-  // Ofrecer también el período SIGUIENTE al máximo: es el que estás por armar/cerrar,
-  // todavía sin frentes certificados pero donde querés estimar cuánto vas a poder cobrar.
-  if(arr.length){ const max = Math.max(...arr); if(!set.has(max+1)) arr.push(max+1); }
-  return arr.sort((x,y)=>y-x); // más reciente primero
+  // El mes en curso siempre debe estar disponible aunque todavía no tenga datos cargados,
+  // pero NO se inventan períodos futuros (agosto no existe hasta que llegue).
+  set.add(periodoActual());
+  return [...set].sort((x,y)=>y-x); // más reciente primero
+}
+
+function switchCertTab(tab){
+  ['est','av','ce'].forEach(t=>{
+    const pane=document.getElementById('cpane-'+t);
+    const btn=document.getElementById('ctab-'+t);
+    if(pane) pane.style.display = (t===tab)?'block':'none';
+    if(btn) btn.classList.toggle('active', t===tab);
+  });
+  if(tab==='av'||tab==='ce') renderResumenPeriodo();
+  if(tab==='est') renderCertPeriodo();
 }
 
 function initCertPeriodo(){
-  const periodos = periodosDisponibles();
-  const sel = document.getElementById('certPeriodoSel');
-  renderResumenPeriodo(); // tabla avance vs certificado (independiente del selector)
-  if(!sel) return;
-  if(!periodos.length){
-    sel.innerHTML = '<option value="">Sin datos de período</option>';
-    const cont = document.getElementById('certPeriodoContenido');
-    if(cont) cont.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">Los períodos de certificado se cargan desde las columnas <strong>CERTIFICADOS</strong> y <strong>Avance real</strong> de la Planilla Madre. Importá la planilla para ver este análisis.</div>';
-    return;
-  }
-  if(certPeriodoSel===null || !periodos.includes(certPeriodoSel)) certPeriodoSel = periodos[0];
-  sel.innerHTML = periodos.map(p=>`<option value="${p}" ${p===certPeriodoSel?'selected':''}>Certificado ${p}</option>`).join('');
-  renderCertPeriodo();
+  renderResumenPeriodo();  // tablas de avance y certificado
+  renderCertPeriodo();     // estimador del mes en curso
 }
 
 // Histórico por período: AVANCE y CERTIFICADO son ejes 100% independientes.
@@ -2056,7 +2182,7 @@ function tablaPeriodoEje(eje){
         ${filas.map(f=>{
           const pctTot = totM2>0 ? (f.m2/totM2*100) : 0;
           return `<tr style="border-bottom:1px solid var(--line);cursor:pointer" onclick="verFrentesPeriodo('${eje}',${f.periodo})">
-            <td style="padding:8px 14px;font-weight:700;color:var(--text)">Cert. ${f.periodo}</td>
+            <td style="padding:8px 14px;font-weight:700;color:var(--text)">Cert. ${f.periodo} <span style="font-weight:400;color:var(--text3);font-size:11px">· ${periodoAMes(f.periodo)}</span></td>
             <td style="padding:8px 14px;text-align:right;color:var(--text2)">${f.n}</td>
             <td style="padding:8px 14px;text-align:right;color:${color};font-weight:600">${fmt(f.m2)}</td>
             <td style="padding:8px 14px;text-align:right;color:var(--text3)">${pctTot.toFixed(1)}%</td>
@@ -2124,10 +2250,11 @@ function exportPeriodoEje(eje){
 function renderCertPeriodo(){
   const cont = document.getElementById('certPeriodoContenido');
   if(!cont) return;
-  const sel = document.getElementById('certPeriodoSel');
-  const N = sel && sel.value!=='' ? Number(sel.value) : certPeriodoSel;
-  if(!Number.isFinite(N)) return;
-  certPeriodoSel = N;
+
+  // El mes en curso se calcula por la FECHA REAL de hoy (no se elige, no se inventa).
+  const N = periodoActual();
+  const header = document.getElementById('estimadorHeader');
+  if(header) header.innerHTML = `Mes en curso: <strong style="color:var(--text)">Certificado ${N} · ${periodoAMes(N)}</strong>`;
 
   // Etapas tildadas (checks de %)
   const etapasOK = [...document.querySelectorAll('.certEtapaChk:checked')].map(c=>Number(c.value));
@@ -2136,35 +2263,27 @@ function renderCertPeriodo(){
   const m2 = arr => arr.reduce((s,a)=>s+(a.area||0),0);
   const sinCert = a => !Number.isFinite(a.cert_periodo); // "no certificado" = sin número de certificado
 
-  // ── PIEZA 1: ARRASTRE PENDIENTE ──
-  // Frentes ejecutados en períodos ANTERIORES a N que todavía NO se certificaron (sin cert_periodo).
-  // Es lo que quedó del mes pasado sin cobrar (observaciones, sin medir, etc.).
+  // ── PIEZA 1: ARRASTRE NO CERTIFICADO ──
+  // Todo lo ejecutado en períodos ANTERIORES al mes en curso que todavía NO se certificó.
+  // Es lo que quedó colgado de meses pasados (con observaciones, sin medir, temas de presupuesto).
   const arrastrePend = ALL.filter(a=>noAnulado(a) && sinCert(a)
     && Number.isFinite(a.avance_periodo) && a.avance_periodo < N);
 
-  // ── PIEZA 2: ADELANTADOS (a restar) ──
-  // Frentes que ya se certificaron en un período ANTERIOR a su ejecución (cert < avance),
-  // o cuyo cert_periodo es anterior a N: ya los cobraste, no cuentan para este período.
-  const adelantados = ALL.filter(a=>noAnulado(a)
-    && Number.isFinite(a.cert_periodo) && Number.isFinite(a.avance_periodo)
-    && a.avance_periodo === N && a.cert_periodo < N);
-
-  // ── PIEZA 3: PERÍODO ACTUAL POR ETAPAS ──
-  // Frentes que se están ejecutando/terminando en este período N, filtrados por las etapas tildadas.
-  // Incluye los del período (avance_periodo===N) y los en obra sin período aún asignado.
+  // ── PIEZA 2: AVANCE DEL MES EN CURSO (por etapas tildadas) ──
+  // Frentes imputados al mes en curso (avance_periodo === N) o en obra este mes sin período
+  // aún cargado, filtrados por las etapas que el usuario da por certificables.
   const delPeriodo = ALL.filter(a=>noAnulado(a) && sinCert(a) && (
     a.avance_periodo === N ||
     (!Number.isFinite(a.avance_periodo) && clasificarFrente(a)==='EN EJECUCION')
   ));
   const delPeriodoTildado = delPeriodo.filter(a=>etapasOK.includes(Number(a.pct||0)));
 
-  // ── TOTAL ESTIMADO ──
-  const m2Arrastre   = m2(arrastrePend);
-  const m2Adelantado = m2(adelantados);
-  const m2Periodo    = m2(delPeriodoTildado);
-  const m2Total = m2Arrastre - m2Adelantado + m2Periodo;
+  // ── TOTAL ESTIMADO = arrastre no certificado + avance del mes (tildado) ──
+  const m2Arrastre = m2(arrastrePend);
+  const m2Periodo  = m2(delPeriodoTildado);
+  const m2Total    = m2Arrastre + m2Periodo;
 
-  // Ya certificado en N (referencia): los que tienen cert_periodo===N
+  // Ya certificado en N (referencia): los que ya tienen cert_periodo===N cargado
   const yaCertificadoN = ALL.filter(a=>noAnulado(a) && a.cert_periodo===N);
 
   const card = (color,valor,titulo,sub)=>`
@@ -2175,7 +2294,7 @@ function renderCertPeriodo(){
     </div>`;
 
   const tablita = (frentes, colExtra)=>`
-    <div style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:6px">
+    <div style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:6px">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead style="position:sticky;top:0;background:var(--bg2)"><tr style="color:var(--text3);text-align:left">
           <th style="padding:6px 10px">Acre</th><th style="padding:6px 10px">Dirección</th>
@@ -2188,7 +2307,7 @@ function renderCertPeriodo(){
           <td style="padding:6px 10px">${a.dir} ${a.alt||''}</td>
           <td style="padding:6px 10px;text-align:right">${(a.area||0).toFixed(1)}</td>
           <td style="padding:6px 10px;text-align:center">${a.pct}%</td>
-          <td style="padding:6px 10px;text-align:center;color:var(--text3)">${Number.isFinite(a.avance_periodo)?'Cert. '+a.avance_periodo:'—'}</td>
+          <td style="padding:6px 10px;text-align:center;color:var(--text3)">${Number.isFinite(a.avance_periodo)?periodoAMes(a.avance_periodo):'—'}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div>`;
@@ -2196,30 +2315,29 @@ function renderCertPeriodo(){
   cont.innerHTML = `
     <div style="background:linear-gradient(135deg,rgba(61,214,140,.12),rgba(79,163,232,.08));border:1.5px solid var(--green);border-radius:10px;padding:16px;margin-bottom:14px;text-align:center">
       <div style="font-size:32px;font-weight:800;color:var(--green);font-family:var(--fh)">${fmt(m2Total)} m²</div>
-      <div style="font-size:13px;color:var(--text)">Estimado que vas a poder certificar en el Certificado ${N}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">= arrastre pendiente − ya adelantado + lo del período (etapas tildadas)</div>
+      <div style="font-size:13px;color:var(--text)">Estimado a certificar en ${periodoAMes(N)} (Cert. ${N})</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">= arrastre no certificado de meses anteriores + avance del mes en curso (etapas tildadas)</div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px">
-      ${card('var(--yellow)', '+'+fmt(m2Arrastre)+' m²', 'Arrastre pendiente', arrastrePend.length+' frentes de períodos anteriores sin certificar')}
-      ${card('var(--accent)', '−'+fmt(m2Adelantado)+' m²', 'Ya adelantado', adelantados.length+' frentes cobrados antes de ejecutar')}
-      ${card('var(--blue)', '+'+fmt(m2Periodo)+' m²', 'Del período (tildado)', delPeriodoTildado.length+' de '+delPeriodo.length+' frentes en obra este período')}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">
+      ${card('var(--yellow)', '+'+fmt(m2Arrastre)+' m²', 'Arrastre no certificado', arrastrePend.length+' frentes de meses anteriores sin certificar')}
+      ${card('var(--blue)', '+'+fmt(m2Periodo)+' m²', 'Avance del mes en curso', delPeriodoTildado.length+' de '+delPeriodo.length+' frentes (etapas tildadas)')}
     </div>
 
     <div style="font-size:12px;color:var(--text2);line-height:1.7;background:var(--bg2);border-radius:6px;padding:10px 12px;margin-bottom:12px">
-      <div>📌 En el <strong>Certificado ${N}</strong> podrías certificar aprox. <strong style="color:var(--green)">${fmt(m2Total)} m²</strong>.</div>
-      <div style="margin-top:4px;color:var(--text3)">Ya tenés cargado como certificado en ${N}: <strong>${fmt(m2(yaCertificadoN))} m²</strong> (${yaCertificadoN.length} frentes con cert. ${N}).</div>
-      ${etapasOK.length<5?`<div style="margin-top:4px;color:var(--yellow)">⚠ Estás excluyendo etapas: solo contás ${etapasOK.map(e=>e+'%').join(', ')||'ninguna'} del período actual.</div>`:''}
+      <div>📌 En <strong>${periodoAMes(N)}</strong> podrías certificar aprox. <strong style="color:var(--green)">${fmt(m2Total)} m²</strong>: <strong style="color:var(--yellow)">${fmt(m2Arrastre)} m²</strong> de arrastre + <strong style="color:var(--blue)">${fmt(m2Periodo)} m²</strong> del mes.</div>
+      ${yaCertificadoN.length?`<div style="margin-top:4px;color:var(--text3)">Ya cargado como certificado en ${N}: ${fmt(m2(yaCertificadoN))} m² (${yaCertificadoN.length} frentes).</div>`:''}
+      ${etapasOK.length<5?`<div style="margin-top:4px;color:var(--yellow)">⚠ Estás contando solo etapas ${etapasOK.map(e=>e+'%').join(', ')||'ninguna'} del mes en curso.</div>`:''}
     </div>
 
     ${arrastrePend.length?`<div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:6px">🔶 Arrastre pendiente — ejecutados antes, sin certificar (${arrastrePend.length}):</div>
+      <div style="font-size:12px;font-weight:600;color:var(--yellow);margin-bottom:6px">🔶 Arrastre no certificado — ejecutados en meses anteriores (${arrastrePend.length}):</div>
       ${tablita(arrastrePend,'Ejecutado en')}
     </div>`:''}
 
     ${delPeriodoTildado.length?`<div>
-      <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px">🔷 Del período actual — etapas tildadas (${delPeriodoTildado.length}):</div>
-      ${tablita(delPeriodoTildado,'Período')}
+      <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:6px">🔷 Avance del mes en curso — etapas tildadas (${delPeriodoTildado.length}):</div>
+      ${tablita(delPeriodoTildado,'Imputado a')}
     </div>`:''}
   `;
 }
@@ -4537,7 +4655,8 @@ async function importarCertificados(input) {
     const faltantes = [];
 
     for (const row of rows) {
-      const acre = String(row[kAcre] ?? '').trim().toUpperCase();
+      let acre = String(row[kAcre] ?? '').trim().toUpperCase().replace(/\s+/g,'');
+      if (/^\d+$/.test(acre)) acre = 'AA' + acre.padStart(4,'0'); // "10" -> "AA0010"
       if (!acre) continue;
       const cert   = kCert   ? parsePeriodo(row[kCert])   : null;
       const avance = kAvance ? parsePeriodo(row[kAvance]) : null;
@@ -4681,10 +4800,21 @@ async function importarPlanillaMadre(input) {
     let actualizados = 0, nuevos = 0, omitidos = 0;
     const ahora = new Date().toISOString();
     const preview = [];
+    const omitidosDetalle = []; // registrar qué filas se ignoran, para que nada se pierda en silencio
 
     for (const row of rows) {
-      const id = String(getCol(row, colMap.id) || '').trim().toUpperCase();
-      if (!id || !id.startsWith('AA')) { omitidos++; continue; }
+      let id = String(getCol(row, colMap.id) || '').trim().toUpperCase();
+      // Tolerar formatos: quitar espacios internos, y si es solo números anteponer "AA"
+      id = id.replace(/\s+/g, '');
+      if (/^\d+$/.test(id)) id = 'AA' + id.padStart(4, '0'); // "10" -> "AA0010"
+      // Fila sin ningún dato de acre útil
+      const dirRow = String(getCol(row, colMap.dir) || '').trim();
+      if (!id && !dirRow) { omitidos++; continue; } // fila totalmente vacía, ignorar sin ruido
+      if (!id || !id.startsWith('AA')) {
+        omitidos++;
+        omitidosDetalle.push(`${id || '(sin ID)'} — ${dirRow || 'sin dirección'}`);
+        continue;
+      }
 
       const f_med  = fmtDate(getCol(row, colMap.f_med));
       const f_prog = fmtDate(getCol(row, colMap.f_prog)) || (String(getCol(row, colMap.f_prog)||'').trim().toUpperCase() === 'X' ? 'X' : null);
@@ -4774,6 +4904,15 @@ async function importarPlanillaMadre(input) {
           ${omitidos} filas ignoradas
         </div>
       </div>
+      ${omitidosDetalle.length ? `
+        <div style="background:var(--bg3);border:1px solid var(--accent);border-radius:4px;padding:12px;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">⚠ ${omitidosDetalle.length} filas con acre inválido — NO se importaron (revisá el ID en el Excel):</div>
+          <div style="font-size:11px;color:var(--text2);max-height:150px;overflow-y:auto;line-height:1.6">
+            ${omitidosDetalle.slice(0,50).map(o=>`• ${o}`).join('<br>')}
+            ${omitidosDetalle.length>50?`<br><em>… y ${omitidosDetalle.length-50} más</em>`:''}
+          </div>
+        </div>
+      ` : ''}
       ${preview.length ? `
         <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">
           Cambios de estado detectados (${preview.length}${preview.length > 20 ? ', mostrando primeros 20' : ''}):
