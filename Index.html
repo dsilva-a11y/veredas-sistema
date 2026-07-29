@@ -373,11 +373,13 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           <div class="cert-tab active" id="ctab-est" onclick="switchCertTab('est')">📑 Estimador (mes en curso)</div>
           <div class="cert-tab" id="ctab-av" onclick="switchCertTab('av')">🔷 Avance</div>
           <div class="cert-tab" id="ctab-ce" onclick="switchCertTab('ce')">✅ Certificado</div>
+          <div class="cert-tab" id="ctab-med" onclick="switchCertTab('med')">📏 Para medir</div>
         </div>
 
         <!-- SOLAPA ESTIMADOR -->
         <div id="cpane-est" class="cert-pane" style="padding:14px 16px">
           <div id="estimadorHeader" style="font-size:12.5px;color:var(--text2);margin-bottom:10px"></div>
+          <div id="barraAvanceMes" style="margin-bottom:14px"></div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Tildá qué etapas del mes en curso contás como certificables <span style="color:var(--text3)">(a principio de mes tildás todo; a fin de mes destildás lo que no va a llegar)</span>:</div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--bg3);border-radius:8px">
             <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer"><input type="checkbox" class="certEtapaChk" value="25" onchange="renderCertPeriodo()"> Apertura (25%)</label>
@@ -407,6 +409,16 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
           </div>
           <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Frentes cobrados en cada período (columna "CERTIFICADOS" de la planilla).</div>
           <div class="pb2" style="padding:0"><div id="certPeriodoTabla"></div></div>
+        </div>
+
+        <!-- SOLAPA PARA MEDIR -->
+        <div id="cpane-med" class="cert-pane" style="display:none">
+          <div class="ph" style="display:flex;align-items:center;gap:8px">
+            <span class="pt" style="color:var(--yellow)">📏 Frentes en condiciones de medir</span>
+            <button class="btn bg" onclick="exportParaMedir()" style="margin-left:auto;font-size:11px;background:rgba(240,192,80,.15);color:var(--yellow);border-color:rgba(240,192,80,.3)">↓ Excel</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);padding:0 14px 8px">Terminados (100%) y con observaciones (98%) que todavía no tienen fecha de medición cargada. Estos son los que se pueden certificar una vez medidos.</div>
+          <div class="pb2" style="padding:0"><div id="paraMedirTabla"></div></div>
         </div>
       </div>
     </div>
@@ -471,7 +483,7 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
       <div class="kr">
         <div class="kpi"><div class="kv" id="kM2Ej" style="color:var(--green)">0</div><div class="kl">m² ejecutados</div><div class="ks" id="kFrEj" style="color:var(--text3)">0 frentes</div><div class="ki">✅</div><div class="kb" id="kb-ej" style="background:var(--green)"></div></div>
         <div class="kpi"><div class="kv" id="kM2Ei" style="color:var(--yellow)">0</div><div class="kl">m² en ejecución</div><div class="ks" id="kFrEi" style="color:var(--text3)">0 frentes</div><div class="ki">🔨</div><div class="kb" id="kb-ei" style="background:var(--yellow)"></div></div>
-        <div class="kpi"><div class="kv" id="kM2Ae" style="color:var(--blue)">0</div><div class="kl">m² a ejecutar</div><div class="ks" id="kFrAe" style="color:var(--text3)">0 frentes</div><div class="ki">📋</div><div class="kb" id="kb-ae" style="background:var(--blue)"></div></div>
+        <div class="kpi"><div class="kv" id="kM2Ae" style="color:var(--blue)">0</div><div class="kl">m² a ejecutar (programados)</div><div class="ks" id="kFrAe" style="color:var(--text3)">0 frentes</div><div class="ki">📋</div><div class="kb" id="kb-ae" style="background:var(--blue)"></div></div>
         <div class="kpi"><div class="kv" id="kM2Tot" style="color:var(--accent)">0</div><div class="kl">m² totales programa</div><div class="ks" id="kFrTot" style="color:var(--text3)">0 frentes totales</div><div class="ki">📐</div><div class="kb" style="width:100%;background:var(--line2)"></div></div>
       </div>
       <div class="g2">
@@ -482,6 +494,9 @@ tr:hover td{background:var(--bg3);cursor:pointer;}
         <div class="panel"><div class="ph"><span class="pt">m² por materialidad (top 10)</span></div><div class="pb2" style="height:250px"><canvas id="cMat"></canvas></div></div>
         <div class="panel"><div class="ph"><span class="pt">m² por comuna</span></div><div class="pb2" style="height:250px"><canvas id="cComuna"></canvas></div></div>
       </div>
+      <!-- Barra de avance del mes en curso -->
+      <div id="barraAvanceMesDash" style="margin-top:18px"></div>
+
       <!-- Punto 9: resumen por % de avance -->
       <div class="panel" style="margin-top:18px">
         <div class="ph"><span class="pt">Resumen por etapa de avance</span><span class="tag" id="avanceSubtitle" style="font-size:10px;color:var(--text3)"></span></div>
@@ -2040,7 +2055,7 @@ function periodosDisponibles(){
 }
 
 function switchCertTab(tab){
-  ['est','av','ce'].forEach(t=>{
+  ['est','av','ce','med'].forEach(t=>{
     const pane=document.getElementById('cpane-'+t);
     const btn=document.getElementById('ctab-'+t);
     if(pane) pane.style.display = (t===tab)?'block':'none';
@@ -2048,6 +2063,7 @@ function switchCertTab(tab){
   });
   if(tab==='av'||tab==='ce') renderResumenPeriodo();
   if(tab==='est') renderCertPeriodo();
+  if(tab==='med') renderParaMedir();
 }
 
 function initCertPeriodo(){
@@ -2160,6 +2176,88 @@ function exportPeriodoEje(eje){
   showToast(`✓ ${eje==='avance'?'Avance':'Certificado'} exportado (${body.length} frentes)`);
 }
 
+// Barra de avance del mes en curso: muestra cómo viene la ejecución (qué % de los frentes
+// del mes ya están terminados vs en proceso vs sin arrancar). Recibe el set de frentes a medir.
+function barraAvanceHTML(frentes, titulo){
+  const noAn = frentes.filter(a=>(a.estado||'').toUpperCase()!=='ANULADA');
+  const m2 = arr => arr.reduce((s,a)=>s+(a.area||0),0);
+  const total = m2(noAn) || 1;
+  const term = noAn.filter(a=>clasificarFrente(a)==='EJECUTADO');
+  const proc = noAn.filter(a=>clasificarFrente(a)==='EN EJECUCION');
+  const sinArr = noAn.filter(a=>clasificarFrente(a)==='A EJECUTAR');
+  const pTerm = m2(term)/total*100, pProc = m2(proc)/total*100, pSin = m2(sinArr)/total*100;
+  const pctEjec = Math.round(pTerm);
+  return `
+    <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12.5px;font-weight:600;color:var(--text)">${titulo}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--green)">${pctEjec}% ejecutado</span>
+      </div>
+      <div style="display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--bg3)">
+        <div style="width:${pTerm}%;background:var(--green)" title="Terminados: ${fmt(m2(term))} m²"></div>
+        <div style="width:${pProc}%;background:var(--yellow)" title="En proceso: ${fmt(m2(proc))} m²"></div>
+        <div style="width:${pSin}%;background:var(--blue)" title="Sin arrancar: ${fmt(m2(sinArr))} m²"></div>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;flex-wrap:wrap">
+        <span style="color:var(--green)">● Terminado: ${fmt(m2(term))} m² (${term.length})</span>
+        <span style="color:var(--yellow)">● En proceso: ${fmt(m2(proc))} m² (${proc.length})</span>
+        <span style="color:var(--blue)">● Sin arrancar: ${fmt(m2(sinArr))} m² (${sinArr.length})</span>
+      </div>
+    </div>`;
+}
+
+// Frentes en condiciones de medir: terminados (100%) o con observaciones (98%) que
+// todavía no tienen fecha de medición. Son los certificables una vez medidos.
+function frentesParaMedir(){
+  return ALL.filter(a=>esMedible(a) && !a.f_med)
+    .sort((a,b)=>(b.area||0)-(a.area||0));
+}
+
+function renderParaMedir(){
+  const cont = document.getElementById('paraMedirTabla');
+  if(!cont) return;
+  const lista = frentesParaMedir();
+  if(!lista.length){ cont.innerHTML = '<div style="color:var(--green);font-size:12px;padding:14px 16px">✓ No hay frentes pendientes de medición.</div>'; return; }
+  const m2Total = lista.reduce((s,a)=>s+(a.area||0),0);
+  cont.innerHTML = `
+    <div style="font-size:12px;color:var(--text2);padding:10px 14px;background:var(--bg2)">
+      <strong style="color:var(--yellow)">${lista.length} frentes · ${fmt(m2Total)} m²</strong> listos para medir y certificar
+    </div>
+    <div style="max-height:420px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead style="position:sticky;top:0;background:var(--bg2)"><tr style="color:var(--text3);text-align:left">
+          <th style="padding:7px 12px">Acre</th><th style="padding:7px 12px">Dirección</th>
+          <th style="padding:7px 12px;text-align:right">m²</th><th style="padding:7px 12px;text-align:center">%</th>
+          <th style="padding:7px 12px">Materialidad</th><th style="padding:7px 12px">Responsable</th><th style="padding:7px 12px">F. Fin</th>
+        </tr></thead>
+        <tbody>${lista.map(a=>`<tr onclick="openModal('${a.id}')" style="cursor:pointer;border-top:1px solid var(--line)">
+          <td style="padding:7px 12px;color:var(--accent);font-weight:600">${a.id}</td>
+          <td style="padding:7px 12px">${a.dir} ${a.alt||''}</td>
+          <td style="padding:7px 12px;text-align:right">${(a.area||0).toFixed(1)}</td>
+          <td style="padding:7px 12px;text-align:center">${a.pct}%</td>
+          <td style="padding:7px 12px;color:var(--text3)">${a.mat||'—'}</td>
+          <td style="padding:7px 12px">${a.resp||'—'}</td>
+          <td style="padding:7px 12px;color:var(--text3)">${a.f_fin||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+function exportParaMedir(){
+  const lista = frentesParaMedir();
+  if(!lista.length){ showToast('No hay frentes para medir'); return; }
+  const rows = lista.map(a=>({
+    ACRE:a.id, DIRECCIÓN:`${a.dir} ${a.alt||''}`.trim(), COMUNA:a.com||'',
+    M2:a.area||0, '%':a.pct, MATERIALIDAD:a.mat||'', RESPONSABLE:a.resp||'',
+    'F_FIN':a.f_fin||'', 'OBS':a.obs||''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Para medir');
+  XLSX.writeFile(wb, 'frentes_para_medir.xlsx');
+  showToast(`✓ ${lista.length} frentes para medir exportados`);
+}
+
 function renderCertPeriodo(){
   const cont = document.getElementById('certPeriodoContenido');
   if(!cont) return;
@@ -2168,6 +2266,19 @@ function renderCertPeriodo(){
   const N = periodoActual();
   const header = document.getElementById('estimadorHeader');
   if(header) header.innerHTML = `Mes en curso: <strong style="color:var(--text)">Certificado ${N} · ${periodoAMes(N)}</strong>`;
+
+  // Barra de avance del mes en curso: frentes imputados a este período (avance_periodo===N)
+  // más los en ejecución sin período aún. Muestra cómo viene la ejecución.
+  const barraEl = document.getElementById('barraAvanceMes');
+  if(barraEl){
+    const delMes = ALL.filter(a=>{
+      if((a.estado||'').toUpperCase()==='ANULADA') return false;
+      if(a.avance_periodo===N) return true; // imputado a este mes
+      if(!Number.isFinite(a.avance_periodo) && clasificarFrente(a)==='EN EJECUCION') return true; // en obra sin imputar
+      return false;
+    });
+    barraEl.innerHTML = barraAvanceHTML(delMes, `Avance de ${periodoAMes(N)}`);
+  }
 
   // Etapas tildadas (checks de %)
   const etapasOK = [...document.querySelectorAll('.certEtapaChk:checked')].map(c=>Number(c.value));
@@ -2325,7 +2436,12 @@ function initDash(){
     if(grupo==='ANULADA'){Sp.fran++;return;}
     if(grupo==='EJECUTADO'){Sp.m2ej+=m2;Sp.frej++;}
     else if(grupo==='EN EJECUCION'){Sp.m2ei+=m2;Sp.frei++;}
-    else{Sp.m2ae+=m2;Sp.frae++;}
+    else {
+      // 'A EJECUTAR' se divide: los programados (1%) van a "m² a ejecutar",
+      // los de estado inicial (0%, sin fecha de programación) van aparte.
+      if(Number(a.pct||0)===1){ Sp.m2ae+=m2; Sp.frae++; }
+      else { Sp.m2ini = (Sp.m2ini||0)+m2; Sp.frini = (Sp.frini||0)+1; }
+    }
     const rp=a.resp||'Sin asignar';
     if(!Sp.resps[rp])Sp.resps[rp]={total:0,ej:0};
     Sp.resps[rp].total+=m2;if(grupo==='EJECUTADO')Sp.resps[rp].ej+=m2;
@@ -2340,6 +2456,12 @@ function initDash(){
   document.getElementById('kM2Ei').textContent=fmt(Sp.m2ei||0)+' m²';document.getElementById('kFrEi').textContent=(Sp.frei||0).toLocaleString('es-AR')+' frentes';document.getElementById('kb-ei').style.width=((Sp.m2ei||0)/_tot*100)+'%';
   document.getElementById('kM2Ae').textContent=fmt(Sp.m2ae||0)+' m²';document.getElementById('kFrAe').textContent=(Sp.frae||0).toLocaleString('es-AR')+' frentes';document.getElementById('kb-ae').style.width=((Sp.m2ae||0)/_tot*100)+'%';
   document.getElementById('kM2Tot').textContent=fmt(Sp.m2tot||0)+' m²';document.getElementById('kFrTot').textContent=(Sp.frtot||0).toLocaleString('es-AR')+' frentes totales';
+  // Barra de avance del período seleccionado
+  const barraDash=document.getElementById('barraAvanceMesDash');
+  if(barraDash){
+    const periodoLabel = (document.getElementById('dashPeriodo')?.value||'total')==='total' ? 'todos los períodos' : 'el período seleccionado';
+    barraDash.innerHTML = barraAvanceHTML(data, `Avance de ${periodoLabel}`);
+  }
   const clrs={'EJECUTADO':'#3dd68c','EN EJECUCION':'#f0c050','A EJECUTAR':'#4fa3e8','ANULADA':'#5a5b63','-':'#323338'};
   const eL=Object.keys(Sp.estados);
   dashCharts['cEstados']=new Chart(document.getElementById('cEstados'),{type:'bar',data:{labels:eL,datasets:[{data:eL.map(l=>Sp.estados[l]),backgroundColor:eL.map(l=>clrs[l]||'#a978e8'),borderRadius:3,maxBarThickness:60}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)+' m²'}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#2a2b30'},ticks:{font:{size:10},callback:v=>fmt(v)}}}}});
@@ -2361,12 +2483,12 @@ function initDash(){
     {label:'🟠 Con observaciones (98%)',pcts:[98], color:'#d4561a'},
     {label:'✅ Finalizado (100%)',      pcts:[100],color:'#1e8c5a'},
   ];
-  const activosFrentes=ALL.filter(a=>!['ANULADA'].includes(a.estado));
+  const activosFrentes=data.filter(a=>!['ANULADA'].includes(a.estado));
   const m2ActivoTotal=activosFrentes.reduce((s,a)=>s+(a.area||0),0);
   document.getElementById('avanceSubtitle').textContent=activosFrentes.length+' frentes · '+fmt(m2ActivoTotal)+' m²';
   const avanceTbody=document.getElementById('avanceTbody');
   avanceTbody.innerHTML=etapas.map(et=>{
-    const group=ALL.filter(a=>et.pcts.includes(a.pct)&&!['ANULADA'].includes(a.estado));
+    const group=data.filter(a=>et.pcts.includes(a.pct)&&!['ANULADA'].includes(a.estado));
     const fr=group.length, m2g=group.reduce((s,a)=>s+(a.area||0),0);
     const pctTot=m2ActivoTotal>0?Math.round(m2g/m2ActivoTotal*100):0;
     return `<tr style="border-bottom:1px solid var(--line2)">
